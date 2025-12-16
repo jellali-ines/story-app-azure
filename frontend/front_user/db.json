@@ -1,0 +1,28 @@
+{
+  "stories": [
+    {
+      "id": 1,
+      "title": "The Hare and The Tortoise",
+      "image_url": "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=500&h=300&fit=crop",
+      "reading_time": "5 mins",
+      "audio_url": null,
+      "text": "Once upon a time, there was a hare who was very proud of his speed. He often made fun of the tortoise for being so slow.\n\nOne day, the tortoise got tired of the hare's boasting and challenged him to a race. The hare laughed and accepted the challenge.\n\nThe race began, and the hare quickly ran ahead. He was so far ahead that he decided to take a nap under a tree, thinking he had plenty of time.\n\nMeanwhile, the tortoise kept moving slowly but steadily. He never stopped walking.\n\nWhen the hare woke up, he saw the tortoise was about to reach the finish line. He ran as fast as he could, but it was too late. The tortoise had won the race.\n\nThe moral of the story is: \"Slow and steady wins the race.\""
+    },
+    {
+      "id": 2,
+      "title": "The Magical Lunch",
+      "image_url": "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=500&h=300&fit=crop",
+      "reading_time": "4 mins",
+      "audio_url": null,
+      "text": "Once upon a time, there was a little boy named Alex who didn't like to eat his vegetables. He always pushed them to the side of his plate.\n\nOne day, something magical happened. His carrots started to glow! \"Eat me,\" said a tiny voice. \"I'll help you see in the dark!\"\n\nAlex was so surprised that he took a bite. The carrot was sweet and crunchy. Suddenly, he could see everything clearly, even in the dim room.\n\nThen his broccoli started to dance. \"Eat me too!\" it said. \"I'll make you strong and healthy!\"\n\nAlex tried the broccoli and felt a burst of energy. From that day on, Alex ate all his vegetables and became the healthiest boy in school."
+    },
+    {
+      "id": 3,
+      "title": "The Lost Kitten",
+      "image_url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&h=300&fit=crop",
+      "reading_time": "3 mins",
+      "audio_url": null,
+      "text": "One rainy afternoon, Lily heard a soft meowing sound coming from her backyard. She followed the sound and found a tiny, wet kitten hiding under a bush.\n\n\"Don't be scared,\" Lily whispered gently. \"I'll take care of you.\"\n\nShe brought the kitten inside, dried it with a soft towel, and gave it some warm milk. The kitten purred happily and rubbed against her leg.\n\nLily made posters and asked her neighbors if they had lost a kitten. After two days, a little girl from down the street came crying to Lily's door.\n\n\"That's my Whiskers!\" she exclaimed with joy.\n\nLily was sad to see the kitten go, but happy to see it reunited with its owner. The next week, the little girl's family surprised Lily with a new kitten of her own!"
+    }
+  ]
+}

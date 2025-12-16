@@ -1,0 +1,49 @@
+.container-img {
+    width: 100%;
+    height: 50%;
+    border-radius: 30px;
+    margin: 2% auto;
+    overflow: hidden; /* 🔥 IMPORTANT pour couper l’image */
+    position: relative;
+}
+
+.container-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* ✅ l’image remplit parfaitement */
+    display: block;
+}
+
+@media (max-width: 1024px) {
+  .container-img {
+    height: 50%;
+    border-radius: 20px;
+  }
+}
+@media (max-width: 1890px) {
+  .container-img {
+    height: 70%;
+    border-radius: 20px;
+  }
+}
+
+/* ✅ mobile */
+@media (max-width: 768px) {
+  .container-img {
+    height: 35%;
+    width: 100%;
+    border-radius: 15px;
+  }
+}
+.subtitle {
+  font-size: 1.5rem;
+  color: black;
+  text-align: center;
+  margin-top: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out; /* fade-in/fade-out */
+}
+
+.subtitle.show {
+  opacity: 1;
+}

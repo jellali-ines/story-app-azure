@@ -1,0 +1,37 @@
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center; /* centre horizontalement */
+  align-items: center; 
+}
+
+.container-min-like{
+  display: flex;
+  justify-content: space-between;
+}
+.container-min{
+  background-color: transparent;      /* fond transparent */
+  border: 2px solid #999;             /* contour gris */
+  border-radius: 20px;                 /* coins arrondis */
+  width: 60px; 
+  height: 45px; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;                     /* taille de l'emoji */
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+h1{
+   font-size: 24px;
+}
+.btn{
+  width: 100%;
+  border-radius: 20px;
+  height: 50px;
+  background-color: orange;
+  font-size: 18px;
+  border: none;
+  margin: 10px;
+}

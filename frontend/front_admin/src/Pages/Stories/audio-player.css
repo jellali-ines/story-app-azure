@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+:root{
+    --mainColor: #fff;
+    --mainLightColor: rgba(235,235,235,0.5);
+    --mainDimColor: rgb(228,228,228);
+}
+
+
+.container{
+    min-height: 100vh;
+    min-width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--mainColor);
+    font-family: 'Poppins';   
+}
+
+.music-Container{
+    width: 100%;
+    padding: 10px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    border-radius: 36px;
+    box-shadow: 0 0 20px rgba(26,26,26,0.1),
+    0 0 40px rgba(26,26,26,0.1),
+    0 0 80px rgba(26,26,26,0.1);
+    backdrop-filter: blur(15px);
+    font-weight: 600;
+}
+
+.musicPlayer{
+    margin: 0;
+    margin-bottom: 10px;
+    color: var(--mainLightColor);
+}
+
+.musicTimerDiv{
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-weight: 600;
+}
+
+.musicProgressBar {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: #ddd; /* couleur de fond de la barre */
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+
+/* Chrome, Safari, Opera */
+.musicProgressBar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff7f00; /* couleur du “thumb” */
+  cursor: pointer;
+  border: none;
+  margin-top: -5px; /* pour centrer le thumb sur la barre */
+}
+
+/* Chrome, Safari, Opera - track “rempli” */
+.musicProgressBar::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #ff7f00 0%, #ff7f00 var(--value), #ff7f00 var(--value), #ff7f00 100%);
+}
+
+/* Firefox */
+.musicProgressBar::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff7f00;
+  cursor: pointer;
+  border: none;
+}
+
+.musicProgressBar::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: #ff7f00;
+}
+
+/* IE */
+.musicProgressBar::-ms-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff7f00;
+  cursor: pointer;
+  border: none;
+}
+.musicProgressBar::-ms-track {
+  height: 10px;
+  border-radius: 5px;
+  background: #ff7f00;
+  border-color: transparent;
+  color: transparent;
+}
+
+
+.playBtn{
+    font-size: 32px;
+    margin: 8px 10px;
+    color: var(--mainColor);
+    cursor: pointer;
+    font-weight: 400;
+}
+
+.musicControlers-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.musicControlers {
+                /* couleur du grand container */
+  border-radius: 20px;              /* coins arrondis */
+  padding: 7px 10px;               /* espace interne */
+  display: flex;
+  justify-content: space-between;
+  gap: 40px;                        /* espace entre les icônes */
+  border: 2px solid #ddd;
+  position: relative;
+  width: 100%;
+}
+
+/* Icônes gauche/droite */
+.musicControler {
+  font-size: 22px;
+  cursor: pointer;
+  color: #444;
+  transition: 0.2s;
+}
+
+.musicControler:hover {
+  color: #ff7f00;
+}
+
+/* ✅ Container du bouton lecture/pause */
+.launch-container {
+  background: #ff7f00;             /* orange */
+  padding: 5px;
+  border-radius: 50%;              /* rond */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  top: -10px;                      /* dépasse du container */
+  left: 50%;
+  transform: translateX(-50%);
+  
+  box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
+}
+
+/* Icône play/pause */
+.playBtn {
+  font-size: 28px;
+  color: white;
+  cursor: pointer;
+}

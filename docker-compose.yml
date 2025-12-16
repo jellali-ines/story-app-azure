@@ -1,0 +1,144 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console Web
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    volumes:
+      - ./_minio:/data
+  # 1. FRONTEND REACT (Admin Interface)
+  frontadmin:
+    build: ./frontend/front_admin
+    container_name: front-admin
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/front_admin:/app
+      - /app/node_modules
+    networks:
+      - story-network
+    depends_on:
+      - gateway
+      - admin-backend
+    restart: unless-stopped
+    command: npm run dev
+
+  # 2. ADMIN BACKEND EXPRESS.JS (connecté à MongoDB en ligne)
+  admin-backend:
+    build: ./services/admin_service
+    container_name: admin-backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./admin_backend:/app
+      - /app/node_modules
+  
+    networks:
+      - story-network
+    depends_on:
+      - redis
+      - payment-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 3. GATEWAY EXPRESS.JS (API Gateway principal)
+  gateway:
+    build: ./gateway
+    container_name: api-gateway
+    ports:
+      - "8080:3000"   # ❗ Correction : mapping 8080 -> port interne 3000
+    volumes:
+      - ./gateway:/app
+      - /app/node_modules
+
+    networks:
+      - story-network
+    depends_on:
+      - tts-service
+      - payment-service
+      - admin-backend
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
+  # 4. PAYMENT SERVICE (Flask - connecté à MongoDB en ligne)
+  payment-service:
+    build: ./services/payment-service
+    container_name: payment-service
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./services/payment-service:/app
+   
+    networks:
+      - story-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 5. TTS SERVICE (Coqui TTS)
+  tts-service:
+    image: ghcr.io/coqui-ai/tts:latest
+    container_name: tts-service
+    volumes:
+      - ./tts-models:/models
+    command: >
+      tts-server 
+      --port 8000
+      --model_path /models/best_model.pth
+      --config_path /models/config.json
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    networks:
+      - story-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # 6. REDIS (Cache partagé - toujours utile)
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - story-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+networks:
+  story-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    name: story-redis-data
+  tts-models:
+    name: story-tts-models

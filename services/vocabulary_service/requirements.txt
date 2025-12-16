@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+spacy
+wordfreq
+emoji
+pyttsx3
+pydantic
+python-multipart
+nltk
+transformers
+torch
+pandas
