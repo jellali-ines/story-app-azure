@@ -28,7 +28,6 @@ jobs:
   build:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,51 +36,42 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
+
       - name: Log in to ACR
         uses: azure/docker-login@v1
         with:
           login-server: ${{ env.ACR_NAME }}.azurecr.io
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
-      
+
       - name: Build and Push Backend
         run: |
           cd services/user_service
           IMAGE=${{ env.ACR_NAME }}.azurecr.io/backend
-          
           docker build -t ${IMAGE}:${{ github.sha }} .
           docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
-          
           echo "✅ Backend image pushed"
-      
+
       - name: Build and Push Chatbot
         run: |
           cd services/chatbot
           IMAGE=${{ env.ACR_NAME }}.azurecr.io/chatbot
-          
           docker build -t ${IMAGE}:${{ github.sha }} .
           docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
-          
           echo "✅ Chatbot image pushed"
-      
+
       - name: Build and Push Frontend
         run: |
           cd frontend/front_user
           IMAGE=${{ env.ACR_NAME }}.azurecr.io/frontend
-          
           docker build --target production -t ${IMAGE}:${{ github.sha }} .
           docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
-          
           echo "✅ Frontend image pushed"
 
   # ===========================
@@ -92,34 +82,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
-    
     steps:
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      # Check if Container Apps exist, create if not
-      - name: Check and Create Backend App
+
+      - name: Deploy Backend
         run: |
-          if ! az containerapp show --name ${{ env.BACKEND_APP }} \
-                                     --resource-group ${{ env.RESOURCE_GROUP }} \
-                                     >/dev/null 2>&1; then
-            echo "Creating Backend Container App..."
-            
-            COSMOS_CONN=$(az cosmosdb keys list \
-              --name ${{ env.COSMOS_NAME }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --type connection-strings \
-              --query "connectionStrings[0].connectionString" \
-              --output tsv | tr -d '\r')
-            
-            APPINSIGHTS_CONN=$(az monitor app-insights component show \
-              --app appinsights-story \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --query connectionString \
-              --output tsv | tr -d '\r')
-            
+          COSMOS_CONN=$(az cosmosdb keys list --name ${{ env.COSMOS_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --type connection-strings --query "connectionStrings[0].connectionString" --output tsv | tr -d '\r')
+          APPINSIGHTS_CONN=$(az monitor app-insights component show --app appinsights-story --resource-group ${{ env.RESOURCE_GROUP }} --query connectionString --output tsv | tr -d '\r')
+          
+          if ! az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
+            echo "Creating Backend..."
             az containerapp create \
               --name ${{ env.BACKEND_APP }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -130,34 +105,18 @@ jobs:
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars \
-                NODE_ENV=production \
-                PORT=5000 \
-                "MONGODB_URI=${COSMOS_CONN}" \
-                "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
-              --min-replicas 1 \
-              --max-replicas 3 \
-              --cpu 0.5 \
-              --memory 1Gi
-            
-            echo "✅ Backend app created"
+              --env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${COSMOS_CONN}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+              --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
           else
-            echo "Backend app already exists, will update later"
+            echo "Updating Backend..."
+            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${COSMOS_CONN}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
           fi
-      
-      - name: Check and Create Chatbot App
+
+      - name: Deploy Chatbot
         run: |
-          if ! az containerapp show --name ${{ env.CHATBOT_APP }} \
-                                     --resource-group ${{ env.RESOURCE_GROUP }} \
-                                     >/dev/null 2>&1; then
-            echo "Creating Chatbot Container App..."
-            
-            APPINSIGHTS_CONN=$(az monitor app-insights component show \
-              --app appinsights-story \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --query connectionString \
-              --output tsv | tr -d '\r')
-            
+          APPINSIGHTS_CONN=$(az monitor app-insights component show --app appinsights-story --resource-group ${{ env.RESOURCE_GROUP }} --query connectionString --output tsv | tr -d '\r')
+          if ! az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
+            echo "Creating Chatbot..."
             az containerapp create \
               --name ${{ env.CHATBOT_APP }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -168,183 +127,34 @@ jobs:
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars \
-                FLASK_ENV=production \
-                OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate \
-                MODEL_NAME=llama3.1:8b \
-                MAX_REQUESTS_PER_MINUTE=30 \
-                MAX_REQUESTS_PER_DAY=1000 \
-                "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
-              --min-replicas 1 \
-              --max-replicas 3 \
-              --cpu 0.5 \
-              --memory 1Gi
-            
-            echo "✅ Chatbot app created"
+              --env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=llama3.1:8b MAX_REQUESTS_PER_MINUTE=30 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+              --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
           else
-            echo "Chatbot app already exists, will update later"
+            echo "Updating Chatbot..."
+            az containerapp update --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} --set-env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=llama3.1:8b MAX_REQUESTS_PER_MINUTE=30 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
           fi
-      
-      - name: Check and Create Frontend App
+
+      - name: Deploy Frontend
         run: |
-          if ! az containerapp show --name ${{ env.FRONTEND_APP }} \
-                                     --resource-group ${{ env.RESOURCE_GROUP }} \
-                                     >/dev/null 2>&1; then
-            echo "Creating Frontend Container App..."
-            
-            # Get Backend and Chatbot URLs first
-            BACKEND_URL=$(az containerapp show \
-              --name ${{ env.BACKEND_APP }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --query properties.configuration.ingress.fqdn \
-              --output tsv | tr -d '\r')
-            
-            CHATBOT_URL=$(az containerapp show \
-              --name ${{ env.CHATBOT_APP }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --query properties.configuration.ingress.fqdn \
-              --output tsv | tr -d '\r')
-            
+          BACKEND_URL=$(az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
+          CHATBOT_URL=$(az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
+          if ! az containerapp show --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
+            echo "Creating Frontend..."
             az containerapp create \
               --name ${{ env.FRONTEND_APP }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --environment ${{ env.ENV_NAME }} \
               --image ${{ env.ACR_NAME }}.azurecr.io/frontend:latest \
-              --target-port 80 \
-              --ingress external \
+              --target-port 80 --ingress external \
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars \
-                VITE_API_URL=https://${BACKEND_URL} \
-                VITE_AI_API_URL=https://${CHATBOT_URL} \
-              --min-replicas 1 \
-              --max-replicas 5 \
-              --cpu 0.25 \
-              --memory 0.5Gi
-            
-            echo "✅ Frontend app created"
+              --env-vars VITE_API_URL=https://${BACKEND_URL} VITE_AI_API_URL=https://${CHATBOT_URL} \
+              --min-replicas 1 --max-replicas 5 --cpu 0.25 --memory 0.5Gi
           else
-            echo "Frontend app already exists, will update later"
+            echo "Updating Frontend..."
+            az containerapp update --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} --set-env-vars VITE_API_URL=https://${BACKEND_URL} VITE_AI_API_URL=https://${CHATBOT_URL}
           fi
-      
-      # Update existing apps with new images
-      - name: Update Backend
-        run: |
-          COSMOS_CONN=$(az cosmosdb keys list \
-            --name ${{ env.COSMOS_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --type connection-strings \
-            --query "connectionStrings[0].connectionString" \
-            --output tsv | tr -d '\r')
-          
-          APPINSIGHTS_CONN=$(az monitor app-insights component show \
-            --app appinsights-story \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query connectionString \
-            --output tsv | tr -d '\r')
-          
-          az containerapp update \
-            --name ${{ env.BACKEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} \
-            --set-env-vars \
-              NODE_ENV=production \
-              PORT=5000 \
-              "MONGODB_URI=${COSMOS_CONN}" \
-              "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
-          
-          echo "✅ Backend updated"
-      
-      - name: Update Chatbot
-        run: |
-          APPINSIGHTS_CONN=$(az monitor app-insights component show \
-            --app appinsights-story \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query connectionString \
-            --output tsv | tr -d '\r')
-          
-          az containerapp update \
-            --name ${{ env.CHATBOT_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} \
-            --set-env-vars \
-              FLASK_ENV=production \
-              OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate \
-              MODEL_NAME=llama3.1:8b \
-              MAX_REQUESTS_PER_MINUTE=30 \
-              MAX_REQUESTS_PER_DAY=1000 \
-              "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
-          
-          echo "✅ Chatbot updated"
-      
-      - name: Update Frontend
-        run: |
-          BACKEND_URL=$(az containerapp show \
-            --name ${{ env.BACKEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          CHATBOT_URL=$(az containerapp show \
-            --name ${{ env.CHATBOT_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          az containerapp update \
-            --name ${{ env.FRONTEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} \
-            --set-env-vars \
-              VITE_API_URL=https://${BACKEND_URL} \
-              VITE_AI_API_URL=https://${CHATBOT_URL}
-          
-          echo "✅ Frontend updated"
-      
-      - name: Get Application URLs
-        id: get-urls
-        run: |
-          BACKEND_URL=$(az containerapp show \
-            --name ${{ env.BACKEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          CHATBOT_URL=$(az containerapp show \
-            --name ${{ env.CHATBOT_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          FRONTEND_URL=$(az containerapp show \
-            --name ${{ env.FRONTEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          echo "BACKEND_URL=https://$BACKEND_URL" >> $GITHUB_OUTPUT
-          echo "CHATBOT_URL=https://$CHATBOT_URL" >> $GITHUB_OUTPUT
-          echo "FRONTEND_URL=https://$FRONTEND_URL" >> $GITHUB_OUTPUT
-      
-      - name: Deployment Summary
-        run: |
-          echo "=========================================="
-          echo "✅ DEPLOYMENT COMPLETE"
-          echo "=========================================="
-          echo ""
-          echo "🌐 Application URLs:"
-          echo "  Frontend:  ${{ steps.get-urls.outputs.FRONTEND_URL }}"
-          echo "  Backend:   ${{ steps.get-urls.outputs.BACKEND_URL }}"
-          echo "  Chatbot:   ${{ steps.get-urls.outputs.CHATBOT_URL }}"
-          echo ""
-          echo "🦙 Ollama VM: http://${{ secrets.OLLAMA_VM_IP }}:11434"
-          echo ""
-          echo "📊 Deployment Info:"
-          echo "  Commit: ${{ github.sha }}"
-          echo "  Author: ${{ github.actor }}"
-          echo "  Branch: ${{ github.ref_name }}"
-          echo "=========================================="
 
   # ===========================
   # JOB 3: Verify Deployment
@@ -353,96 +163,52 @@ jobs:
     name: Verify Deployment
     runs-on: ubuntu-latest
     needs: deploy
-    if: github.ref == 'refs/heads/main'
-    
     steps:
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
+
       - name: Get Application URLs
         id: urls
         run: |
-          BACKEND_URL=$(az containerapp show \
-            --name ${{ env.BACKEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          CHATBOT_URL=$(az containerapp show \
-            --name ${{ env.CHATBOT_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
-          FRONTEND_URL=$(az containerapp show \
-            --name ${{ env.FRONTEND_APP }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query properties.configuration.ingress.fqdn \
-            --output tsv | tr -d '\r')
-          
+          BACKEND_URL=$(az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
+          CHATBOT_URL=$(az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
+          FRONTEND_URL=$(az containerapp show --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
           echo "BACKEND_URL=https://$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "CHATBOT_URL=https://$CHATBOT_URL" >> $GITHUB_OUTPUT
           echo "FRONTEND_URL=https://$FRONTEND_URL" >> $GITHUB_OUTPUT
-      
-      - name: Wait for Services
-        run: |
-          echo "⏳ Waiting 45 seconds for services to stabilize..."
-          sleep 45
-      
+
       - name: Test Backend Health
         run: |
-          echo "🔍 Testing Backend Health..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            ${{ steps.urls.outputs.BACKEND_URL }}/health || echo "000")
-          
-          if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Backend is healthy (HTTP $RESPONSE)"
-          else
-            echo "⚠️  Backend returned HTTP $RESPONSE"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.BACKEND_URL }}/health || echo "000")
+          if [ "$RESPONSE" != "200" ]; then
+            echo "❌ Backend failed health check"
             exit 1
           fi
-      
+
       - name: Test Chatbot Health
         run: |
-          echo "🔍 Testing Chatbot Health..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            ${{ steps.urls.outputs.CHATBOT_URL }}/api/health || echo "000")
-          
-          if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Chatbot is healthy (HTTP $RESPONSE)"
-          else
-            echo "⚠️  Chatbot returned HTTP $RESPONSE"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.CHATBOT_URL }}/api/health || echo "000")
+          if [ "$RESPONSE" != "200" ]; then
+            echo "❌ Chatbot failed health check"
             exit 1
           fi
-      
+
       - name: Test Frontend Accessibility
         run: |
-          echo "🔍 Testing Frontend..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            ${{ steps.urls.outputs.FRONTEND_URL }} || echo "000")
-          
-          if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Frontend is accessible (HTTP $RESPONSE)"
-          else
-            echo "⚠️  Frontend returned HTTP $RESPONSE"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.FRONTEND_URL }} || echo "000")
+          if [ "$RESPONSE" != "200" ]; then
+            echo "❌ Frontend failed accessibility check"
             exit 1
           fi
-      
+
       - name: Final Verification Summary
         run: |
           echo "=========================================="
           echo "✅ ALL HEALTH CHECKS PASSED"
           echo "=========================================="
-          echo ""
-          echo "🎉 Deployment verified successfully!"
-          echo ""
-          echo "📱 Your application is live:"
-          echo "   ${{ steps.urls.outputs.FRONTEND_URL }}"
-          echo ""
-          echo "🔗 API Endpoints:"
-          echo "   Backend:  ${{ steps.urls.outputs.BACKEND_URL }}"
-          echo "   Chatbot:  ${{ steps.urls.outputs.CHATBOT_URL }}"
-          echo ""
+          echo "🌐 Frontend: ${{ steps.urls.outputs.FRONTEND_URL }}"
+          echo "🔗 Backend: ${{ steps.urls.outputs.BACKEND_URL }}"
+          echo "🔗 Chatbot: ${{ steps.urls.outputs.CHATBOT_URL }}"
           echo "=========================================="
