@@ -39,3 +39,4 @@ data/
 # MLOps
 mlruns/
 models/*.pkl
+azure-credentials.json
