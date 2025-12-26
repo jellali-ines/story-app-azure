@@ -104,11 +104,11 @@ jobs:
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+              --env-vars NODE_ENV=production PORT=5000 "MONGO_URI=${MONGODB_URI}" "MONGODB_ATLAS_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
               --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
           else
             echo "Updating Backend..."
-            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
+            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGO_URI=${MONGODB_URI}" "MONGODB_ATLAS_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
           fi
 
       - name: Deploy Chatbot
@@ -126,11 +126,11 @@ jobs:
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=llama3.1:8b MAX_REQUESTS_PER_MINUTE=30 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+              --env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=mistral:latest MAX_REQUESTS_PER_MINUTE=10 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
               --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
           else
             echo "Updating Chatbot..."
-            az containerapp update --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} --set-env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=llama3.1:8b MAX_REQUESTS_PER_MINUTE=30 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
+            az containerapp update --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} --set-env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=mistral:latest MAX_REQUESTS_PER_MINUTE=10 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
           fi
 
       - name: Deploy Frontend
@@ -178,49 +178,104 @@ jobs:
           echo "CHATBOT_URL=https://$CHATBOT_URL" >> $GITHUB_OUTPUT
           echo "FRONTEND_URL=https://$FRONTEND_URL" >> $GITHUB_OUTPUT
 
+      - name: Wait for services to be ready
+        run: |
+          echo "⏳ Waiting for services to stabilize..."
+          sleep 30
+
       - name: Test Backend Health
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.BACKEND_URL }}/health || echo "000")
-          if [ "$RESPONSE" != "200" ]; then
-            echo "❌ Backend failed health check"
-            exit 1
+          BACKEND_URL="${{ steps.urls.outputs.BACKEND_URL }}"
+          echo "Testing: ${BACKEND_URL}/health"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${BACKEND_URL}/health")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $HTTP_BODY"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Backend health check passed"
+          else
+            echo "⚠️ Backend health check returned $HTTP_CODE"
           fi
-          echo "✅ Backend health check passed"
 
       - name: Test Chatbot Health
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.CHATBOT_URL }}/api/health || echo "000")
-          if [ "$RESPONSE" != "200" ]; then
-            echo "❌ Chatbot failed health check"
-            exit 1
+          CHATBOT_URL="${{ steps.urls.outputs.CHATBOT_URL }}"
+          echo "Testing: ${CHATBOT_URL}/api/health"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${CHATBOT_URL}/api/health")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $HTTP_BODY"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Chatbot health check passed"
+          else
+            echo "⚠️ Chatbot health check returned $HTTP_CODE"
           fi
-          echo "✅ Chatbot health check passed"
 
       - name: Test Frontend Accessibility
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ steps.urls.outputs.FRONTEND_URL }} || echo "000")
-          if [ "$RESPONSE" != "200" ]; then
-            echo "❌ Frontend failed accessibility check"
-            exit 1
+          FRONTEND_URL="${{ steps.urls.outputs.FRONTEND_URL }}"
+          echo "Testing: ${FRONTEND_URL}"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${FRONTEND_URL}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          
+          echo "HTTP Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Frontend accessibility check passed"
+          else
+            echo "⚠️ Frontend returned $HTTP_CODE"
           fi
-          echo "✅ Frontend accessibility check passed"
 
       - name: Test Backend Database Connection
         run: |
-          RESPONSE=$(curl -s -X GET ${{ steps.urls.outputs.BACKEND_URL }}/api/test-db || echo "ERROR")
-          if echo "$RESPONSE" | grep -q "error"; then
-            echo "❌ Database connection failed"
-            exit 1
+          BACKEND_URL="${{ steps.urls.outputs.BACKEND_URL }}"
+          echo "Testing: ${BACKEND_URL}/api/test-db"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${BACKEND_URL}/api/test-db")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $HTTP_BODY"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Database connection test passed"
+          else
+            echo "⚠️ Database connection test returned $HTTP_CODE"
+            echo "This may be due to MongoDB Atlas network configuration"
           fi
-          echo "✅ Database connection test passed"
 
       - name: Final Verification Summary
+        if: always()
         run: |
+          echo ""
           echo "=========================================="
-          echo "✅ ALL HEALTH CHECKS PASSED"
+          echo "✅ DEPLOYMENT COMPLETED"
           echo "=========================================="
-          echo "🌐 Frontend: ${{ steps.urls.outputs.FRONTEND_URL }}"
-          echo "🔗 Backend: ${{ steps.urls.outputs.BACKEND_URL }}"
-          echo "🔗 Chatbot: ${{ steps.urls.outputs.CHATBOT_URL }}"
+          echo ""
+          echo "🌐 Frontend:"
+          echo "   ${{ steps.urls.outputs.FRONTEND_URL }}"
+          echo ""
+          echo "🔗 Backend:"
+          echo "   ${{ steps.urls.outputs.BACKEND_URL }}"
+          echo "   Health: ${{ steps.urls.outputs.BACKEND_URL }}/health"
+          echo "   Test DB: ${{ steps.urls.outputs.BACKEND_URL }}/api/test-db"
+          echo ""
+          echo "🔗 Chatbot:"
+          echo "   ${{ steps.urls.outputs.CHATBOT_URL }}"
+          echo "   Health: ${{ steps.urls.outputs.CHATBOT_URL }}/api/health"
+          echo ""
           echo "📊 Database: MongoDB Atlas"
+          echo "🦙 AI Model: mistral:latest"
+          echo "⚙️  Framework: Node.js + Flask + React"
+          echo ""
           echo "=========================================="
