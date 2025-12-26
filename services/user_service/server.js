@@ -10,11 +10,10 @@ dotenv.config();
 const app = express();
 
 // ==================== MIDDLEWARE ====================
-// CORS - السماح لكل المصادر للتطوير
+// CORS - السماح لكل المصادر
 app.use(cors({
-origin: "*"  // ← هذا يسمح للجميع بالوصول (للتجربة فقط)
+  origin: "*"
 }));
-
 
 // Body parser
 app.use(express.json());
@@ -25,28 +24,106 @@ app.use(cookieParser());
 const foldersRoutes = require('./routes/folders');
 const playlistsRoutes = require('./routes/playlists');
 const userRoutes = require("./routes/userRoutes");
-const genreRoutes = require("./routes/genreRoutes");
 const storyRoutes = require("./routes/storyRoutes");
 const historyRoutes = require("./routes/historyRoutes");
 const authRoutes = require("./routes/authRouters");
 
 app.use("/api/folders", foldersRoutes);
 app.use("/api/playlists", playlistsRoutes);
-app.use("/api/genres", genreRoutes);
 app.use("/api/stories", storyRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/history", historyRoutes);
 
+// ==================== HEALTH CHECK ====================
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "ok",
+    timestamp: new Date(),
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+  });
+});
+
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
-// ==================== MONGO ====================
+// ==================== DATABASE TEST ====================
+app.get('/api/test-db', async (req, res) => {
+  try {
+    // تحقق من حالة الاتصال
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'MongoDB not connected',
+        readyState: mongoose.connection.readyState
+      });
+    }
+
+    // اختبر الـ ping
+    const adminDb = mongoose.connection.db.admin();
+    await adminDb.ping();
+
+    // احصل على المعلومات
+    const stats = await mongoose.connection.db.stats();
+
+    res.json({
+      status: 'success',
+      message: 'MongoDB connected successfully',
+      database: mongoose.connection.db.getName(),
+      host: mongoose.connection.host,
+      collections: stats.collections,
+      dataSize: stats.dataSize
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message,
+      timestamp: new Date()
+    });
+  }
+});
+
+// ==================== MONGO CONNECTION ====================
+// استخدم MONGO_URI أولاً، ثم fallback إلى MONGODB_ATLAS_URI
+const mongoUri = process.env.MONGO_URI || process.env.MONGODB_ATLAS_URI;
+
+if (!mongoUri) {
+  console.error('❌ No MongoDB URI configured');
+  console.error('   Set MONGO_URI or MONGODB_ATLAS_URI environment variable');
+  process.exit(1);
+}
+
+console.log(`🔗 Connecting to MongoDB...`);
+console.log(`   URI: ${mongoUri.substring(0, 50)}...`);
+
 mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connecté"))
-  .catch((err) => console.error("❌ Erreur MongoDB:", err));
+  .connect(mongoUri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    maxPoolSize: 10,
+    retryWrites: true,
+    w: 'majority'
+  })
+  .then(() => {
+    console.log("✅ MongoDB connecté avec succès");
+    console.log(`   Database: ${mongoose.connection.db.getName()}`);
+  })
+  .catch((err) => {
+    console.error("❌ Erreur de connexion MongoDB:");
+    console.error(`   ${err.message}`);
+    process.exit(1);
+  });
+
+// Gestion des événements de connexion
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️  MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB error:', err.message);
+});
 
 // ==================== ERROR MIDDLEWARE ====================
 app.use(notFound);
@@ -54,4 +131,22 @@ app.use(errorHandler);
 
 // ==================== START SERVER ====================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+  console.log(`   URL: http://localhost:${PORT}`);
+  console.log(`   Health: http://localhost:${PORT}/health`);
+  console.log(`   DB Test: http://localhost:${PORT}/api/test-db`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
