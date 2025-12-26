@@ -16,7 +16,6 @@ env:
   ACR_NAME: acrstory606755
   LOCATION: italynorth
   ENV_NAME: env-storytelling
-  COSMOS_NAME: cosmos-story-606755
   BACKEND_APP: backend
   CHATBOT_APP: chatbot
   FRONTEND_APP: frontend
@@ -90,7 +89,7 @@ jobs:
 
       - name: Deploy Backend
         run: |
-          COSMOS_CONN=$(az cosmosdb keys list --name ${{ env.COSMOS_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --type connection-strings --query "connectionStrings[0].connectionString" --output tsv | tr -d '\r')
+          MONGODB_URI=${{ secrets.MONGODB_ATLAS_URI }}
           APPINSIGHTS_CONN=$(az monitor app-insights component show --app appinsights-story --resource-group ${{ env.RESOURCE_GROUP }} --query connectionString --output tsv | tr -d '\r')
           
           if ! az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
@@ -105,11 +104,11 @@ jobs:
               --registry-server ${{ env.ACR_NAME }}.azurecr.io \
               --registry-username ${{ secrets.ACR_USERNAME }} \
               --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${COSMOS_CONN}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+              --env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
               --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
           else
             echo "Updating Backend..."
-            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${COSMOS_CONN}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
+            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGODB_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
           fi
 
       - name: Deploy Chatbot
@@ -186,6 +185,7 @@ jobs:
             echo "❌ Backend failed health check"
             exit 1
           fi
+          echo "✅ Backend health check passed"
 
       - name: Test Chatbot Health
         run: |
@@ -194,6 +194,7 @@ jobs:
             echo "❌ Chatbot failed health check"
             exit 1
           fi
+          echo "✅ Chatbot health check passed"
 
       - name: Test Frontend Accessibility
         run: |
@@ -202,6 +203,16 @@ jobs:
             echo "❌ Frontend failed accessibility check"
             exit 1
           fi
+          echo "✅ Frontend accessibility check passed"
+
+      - name: Test Backend Database Connection
+        run: |
+          RESPONSE=$(curl -s -X GET ${{ steps.urls.outputs.BACKEND_URL }}/api/test-db || echo "ERROR")
+          if echo "$RESPONSE" | grep -q "error"; then
+            echo "❌ Database connection failed"
+            exit 1
+          fi
+          echo "✅ Database connection test passed"
 
       - name: Final Verification Summary
         run: |
@@ -211,4 +222,5 @@ jobs:
           echo "🌐 Frontend: ${{ steps.urls.outputs.FRONTEND_URL }}"
           echo "🔗 Backend: ${{ steps.urls.outputs.BACKEND_URL }}"
           echo "🔗 Chatbot: ${{ steps.urls.outputs.CHATBOT_URL }}"
+          echo "📊 Database: MongoDB Atlas"
           echo "=========================================="
