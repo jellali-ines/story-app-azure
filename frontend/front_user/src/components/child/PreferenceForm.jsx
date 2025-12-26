@@ -120,7 +120,7 @@ const PreferencesForm = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/users/${userId}/kids/${kidId}/preferences`,
+        `https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/users/${userId}/kids/${kidId}/preferences`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

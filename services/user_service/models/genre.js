@@ -11,4 +11,4 @@ const GenreSchema = new mongoose.Schema({
   ]
 }, { timestamps: true , collection: "Genre" });
 
-module.exports = mongoose.model("Genre", GenreSchema);
+module.exports = mongoose.models.Genre || mongoose.model("Genre", GenreSchema);

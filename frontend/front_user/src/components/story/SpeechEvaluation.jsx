@@ -76,7 +76,7 @@ export default function StoryWithRecording() {
     formData.append('audio', audioBlob);
     formData.append('text', storyText);
 
-    const res = await fetch('http://localhost:5000/api/evaluate-speech', {
+    const res = await fetch('https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/evaluate-speech', {
       method: 'POST',
       body: formData,
     });

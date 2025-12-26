@@ -30,7 +30,7 @@ const KidProfileSetup = ({ onCancel, onSubmit }) => {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/users/${userId}/kids`,
+        `https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/users/${userId}/kids`,
         {
           method: "POST",
           headers: {

@@ -26,7 +26,7 @@ const CONSTANTS = {
   MIN_SEGMENT_DURATION: 3,
   UPDATE_INTERVAL: 100,
   SKIP_SECONDS: 10,
-  API_BASE_URL: 'http://localhost:5000',
+  API_BASE_URL: 'https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io',
   FALLBACK_AUDIO: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 };
 

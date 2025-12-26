@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Send, Mic, Volume2, Sparkles, Book, Loader2, Zap, Trash2, Copy, RotateCcw, Settings, X } from 'lucide-react';
 
-const BACKEND_URL = 'http://localhost:5002/api';
+const BACKEND_URL = 'https://chatbot.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api';
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => (

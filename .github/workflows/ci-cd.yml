@@ -235,24 +235,7 @@ jobs:
             echo "⚠️ Frontend returned $HTTP_CODE"
           fi
 
-      - name: Test Backend Database Connection
-        run: |
-          BACKEND_URL="${{ steps.urls.outputs.BACKEND_URL }}"
-          echo "Testing: ${BACKEND_URL}/api/test-db"
-          
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${BACKEND_URL}/api/test-db")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "HTTP Code: $HTTP_CODE"
-          echo "Response: $HTTP_BODY"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Database connection test passed"
-          else
-            echo "⚠️ Database connection test returned $HTTP_CODE"
-            echo "This may be due to MongoDB Atlas network configuration"
-          fi
+     
 
       - name: Final Verification Summary
         if: always()

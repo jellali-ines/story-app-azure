@@ -17,7 +17,7 @@ export default function StoryDetails({
   const theme = THEMES[currentTheme] || THEMES.purple;
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/stories/${id}`)
+    fetch(`https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/${id}`)
       .then((res) => res.json())
       .then((data) => {
         const storyData = data.data || data;
@@ -294,7 +294,7 @@ export default function StoryDetails({
       {/* Similar Stories */}
         <StoriesSection
           title="More Like This"
-          apiUrl="http://localhost:5000/api/stories/popular"
+          apiUrl="https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/popular"
           itemsPerPage={4}
           darkMode={darkMode}
           theme={theme}

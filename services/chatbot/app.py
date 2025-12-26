@@ -1,6 +1,7 @@
 """
 Ollama Backend - Production Version for Azure VM
 Works with external Ollama server (VM or local)
+✅ TIMEOUT FIXED: 300 seconds for CPU-only mode
 """
 
 from flask import Flask, request, jsonify
@@ -33,7 +34,9 @@ except ImportError:
 # ================= CONFIG =================
 # Ollama Configuration - points to external VM
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama-vm:11434/api/generate")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3.1:8b")
+MODEL_NAME = os.getenv("MODEL_NAME", "mistral:latest")
+# ✅ TIMEOUT INCREASED TO 300 SECONDS (5 minutes)
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
 
 # Rate limiting
 rate_limit_storage = defaultdict(lambda: {'minute': [], 'day': []})
@@ -42,6 +45,7 @@ MAX_REQUESTS_PER_DAY = int(os.getenv("MAX_REQUESTS_PER_DAY", "1000"))
 
 logger.info(f"Ollama URL: {OLLAMA_URL}")
 logger.info(f"Model: {MODEL_NAME}")
+logger.info(f"✅ Timeout: {OLLAMA_TIMEOUT} seconds")
 
 # ================= HELPERS =================
 
@@ -273,7 +277,7 @@ def call_ollama(user_message, story_context):
         
         logger.info(f"Question complexity: {'high' if is_complex else 'normal'}")
         
-        # Call Ollama
+        # Call Ollama with ✅ INCREASED TIMEOUT
         response = requests.post(
             OLLAMA_URL,
             json={
@@ -288,7 +292,7 @@ def call_ollama(user_message, story_context):
                     "num_thread": 4
                 }
             },
-            timeout=120
+            timeout=OLLAMA_TIMEOUT  # ✅ 300 seconds
         )
         
         end_time = time.time()
@@ -327,10 +331,10 @@ def call_ollama(user_message, story_context):
             'status': 'error'
         }
     except requests.exceptions.Timeout:
-        logger.error("Request timeout")
+        logger.error(f"Request timeout after {OLLAMA_TIMEOUT}s")
         return {
-            'error': 'Request timeout',
-            'status': 'error'
+            'error': f'Request timeout (model is slow on CPU)',
+            'status': 'timeout'
         }
     except Exception as e:
         logger.error(f"Ollama exception: {e}")
@@ -351,6 +355,7 @@ def health():
         'service': 'Story Ollama Backend - VM Version',
         'ollama_url': OLLAMA_URL,
         'model': MODEL_NAME,
+        'timeout': f'{OLLAMA_TIMEOUT}s',
         'ollama_status': 'connected' if ollama_status else 'disconnected',
         'features': [
             'Smart question detection',
@@ -368,9 +373,10 @@ def test():
     """Test endpoint"""
     return jsonify({
         'message': 'Backend is working! 🎉',
-        'version': '2.0 - Ollama VM',
+        'version': '2.1 - Ollama VM (Timeout Fixed)',
         'status': 'ok',
         'ollama_reachable': check_ollama_status(),
+        'timeout': f'{OLLAMA_TIMEOUT}s',
         'timestamp': datetime.now().isoformat()
     }), 200
 
@@ -486,6 +492,7 @@ INSTRUCTIONS:
 Explanation:"""
         
         try:
+            # ✅ TIMEOUT INCREASED HERE TOO
             response = requests.post(
                 OLLAMA_URL,
                 json={
@@ -498,7 +505,7 @@ Explanation:"""
                         "top_p": 0.9
                     }
                 },
-                timeout=60
+                timeout=OLLAMA_TIMEOUT  # ✅ 300 seconds
             )
             
             if response.status_code == 200:
@@ -523,6 +530,12 @@ Explanation:"""
                     'status': 'error'
                 }), 500
         
+        except requests.exceptions.Timeout:
+            logger.error(f"Word explanation timeout after {OLLAMA_TIMEOUT}s")
+            return jsonify({
+                'error': 'Request timeout - model is processing slowly',
+                'status': 'timeout'
+            }), 504
         except Exception as e:
             logger.error(f"Word explanation error: {e}")
             return jsonify({
@@ -554,6 +567,7 @@ if __name__ == '__main__':
     print(f"📍 Flask:      http://localhost:5002")
     print(f"🦙 Ollama URL: {OLLAMA_URL}")
     print(f"🤖 Model:      {MODEL_NAME}")
+    print(f"⏱️  Timeout:    {OLLAMA_TIMEOUT} seconds")
     print(f"🚦 Limits:     {MAX_REQUESTS_PER_MINUTE}/min, {MAX_REQUESTS_PER_DAY}/day")
     print("="*70 + "\n")
     
