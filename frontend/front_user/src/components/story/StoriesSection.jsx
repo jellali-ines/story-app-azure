@@ -18,6 +18,7 @@ const StoriesSection = ({
     const fetchStories = async () => {
       try {
         setLoading(true);
+        console.log('📡 Fetching stories from:', apiUrl);
         const res = await axios.get(apiUrl);
 
         // Cherche l'array à partir de différentes clés possibles
@@ -32,7 +33,10 @@ const StoriesSection = ({
         // Assure que c'est bien un tableau
         setStories(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error("Erreur lors du fetch des stories :", err);
+        console.error("❌ Erreur lors du fetch des stories:", err);
+        console.error("📋 URL demandée:", apiUrl);
+        console.error("📋 Status:", err.response?.status);
+        console.error("📋 Message:", err.response?.data);
         setStories([]);
       } finally {
         setLoading(false);
@@ -139,8 +143,8 @@ const StoriesSection = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {visibleStories.map((story, index) => (
               <StoryCard
-                key={story.story_id || index}
-                id={story.story_id || story.id || index}
+                key={`story-${startIndex}-${index}-${story.story_id || story.id || Math.random()}`}
+                id={story.story_id || story.id}
                 title={story.title}
                 reading_time={story.reading_time || story.duration}
                 image_url={story.image_url || story.cover_image}

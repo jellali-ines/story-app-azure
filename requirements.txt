@@ -1,0 +1,30 @@
+# ===================================
+# AI Backend Requirements - Minimal
+# ===================================
+
+# Web Framework
+flask>=2.3,<3.0
+flask-cors==4.0.0
+
+# HTTP Requests
+requests==2.31.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Monitoring (pour Application Insights)
+opencensus-ext-azure==1.1.9
+opencensus-ext-flask==0.8.0
+
+# Production Server
+gunicorn==21.2.0
+
+# ⚠️ NOTE IMPORTANTE:
+# torch et transformers NE SONT PAS nécessaires
+# car on utilise Ollama (externe)
+# Ceci économise 2-3 GB d'espace!

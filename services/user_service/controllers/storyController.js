@@ -36,32 +36,32 @@ const getStoryById = asyncHandler(async (req, res) => {
   
   console.log('🔍 Looking for story with ID:', storyId);
   
-  // Try to find by MongoDB _id first
   let story = null;
   
+  // جرّب story_id أولاً (لو رقم)
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+    if (story) {
+      console.log('✅ Story found by story_id:', story.title);
+      return res.json(story);
+    }
+  }
+  
+  // جرّب MongoDB _id
   try {
     story = await Story.findById(storyId);
+    if (story) {
+      console.log('✅ Story found by _id:', story.title);
+      return res.json(story);
+    }
   } catch (err) {
-    console.log('⚠️  Not a valid MongoDB ID, trying story_id field...');
+    console.log('⚠️ Not a valid MongoDB ID');
   }
   
-  // If not found by _id, try story_id field
-  if (!story) {
-    story = await Story.findOne({ story_id: parseInt(storyId) });
-  }
-  
-  if (!story) {
-    console.log('❌ Story not found with ID:', storyId);
-    res.status(404);
-    throw new Error("Story non trouvée");
-  }
-  
-  console.log('✅ Story found:', story.title);
-  
-  res.status(200).json({
-    success: true,
-    data: story
-  });
+  // مالقيتش
+  console.log('❌ Story not found with ID:', storyId);
+  res.status(404);
+  throw new Error("Story non trouvée");
 });
 
 // @desc    Search stories
@@ -107,7 +107,20 @@ const getPopularStories = asyncHandler(async (req, res) => {
 // @route   PATCH /api/stories/:id/favorite
 // @access  Public
 const toggleFavoriteStory = asyncHandler(async (req, res) => {
-  const story = await Story.findById(req.params.id);
+  const storyId = req.params.id;
+  let story = null;
+  
+  // جرّب story_id
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+  }
+  
+  // جرّب _id
+  if (!story) {
+    try {
+      story = await Story.findById(storyId);
+    } catch (err) {}
+  }
   
   if (!story) {
     res.status(404);
@@ -117,17 +130,27 @@ const toggleFavoriteStory = asyncHandler(async (req, res) => {
   story.isFavorite = !story.isFavorite;
   await story.save();
   
-  res.status(200).json({ 
-    success: true, 
-    data: story 
-  });
+  res.json(story);
 });
 
 // @desc    Increment story views/plays
 // @route   PATCH /api/stories/:id/play
 // @access  Public
 const incrementStoryViews = asyncHandler(async (req, res) => {
-  const story = await Story.findById(req.params.id);
+  const storyId = req.params.id;
+  let story = null;
+  
+  // جرّب story_id
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+  }
+  
+  // جرّب _id
+  if (!story) {
+    try {
+      story = await Story.findById(storyId);
+    } catch (err) {}
+  }
   
   if (!story) {
     res.status(404);
@@ -137,10 +160,7 @@ const incrementStoryViews = asyncHandler(async (req, res) => {
   story.views += 1;
   await story.save();
   
-  res.status(200).json({ 
-    success: true, 
-    data: story 
-  });
+  res.json(story);
 });
 
 // @desc    Increment story likes
@@ -148,13 +168,18 @@ const incrementStoryViews = asyncHandler(async (req, res) => {
 // @access  Public
 const likeStory = asyncHandler(async (req, res) => {
   const { storyId } = req.params;
-  
   let story = null;
   
-  try {
-    story = await Story.findById(storyId);
-  } catch (err) {
-    story = await Story.findOne({ story_id: parseInt(storyId) });
+  // جرّب story_id
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+  }
+  
+  // جرّب _id
+  if (!story) {
+    try {
+      story = await Story.findById(storyId);
+    } catch (err) {}
   }
   
   if (!story) {
@@ -165,11 +190,7 @@ const likeStory = asyncHandler(async (req, res) => {
   story.likes += 1;
   await story.save();
   
-  res.status(200).json({ 
-    success: true,
-    message: "Story liked successfully",
-    data: story 
-  });
+  res.json(story);
 });
 
 // @desc    Mark story as read
@@ -177,13 +198,18 @@ const likeStory = asyncHandler(async (req, res) => {
 // @access  Public
 const readStory = asyncHandler(async (req, res) => {
   const { storyId } = req.params;
-  
   let story = null;
   
-  try {
-    story = await Story.findById(storyId);
-  } catch (err) {
-    story = await Story.findOne({ story_id: parseInt(storyId) });
+  // جرّب story_id
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+  }
+  
+  // جرّب _id
+  if (!story) {
+    try {
+      story = await Story.findById(storyId);
+    } catch (err) {}
   }
   
   if (!story) {
@@ -194,11 +220,7 @@ const readStory = asyncHandler(async (req, res) => {
   story.views += 1;
   await story.save();
   
-  res.status(200).json({ 
-    success: true,
-    message: "Story marked as read",
-    data: story 
-  });
+  res.json(story);
 });
 
 // @desc    Mark story as complete
@@ -206,13 +228,18 @@ const readStory = asyncHandler(async (req, res) => {
 // @access  Public
 const completeStory = asyncHandler(async (req, res) => {
   const { storyId } = req.params;
-  
   let story = null;
   
-  try {
-    story = await Story.findById(storyId);
-  } catch (err) {
-    story = await Story.findOne({ story_id: parseInt(storyId) });
+  // جرّب story_id
+  if (!isNaN(storyId)) {
+    story = await Story.findOne({ story_id: Number(storyId) });
+  }
+  
+  // جرّب _id
+  if (!story) {
+    try {
+      story = await Story.findById(storyId);
+    } catch (err) {}
   }
   
   if (!story) {
@@ -220,11 +247,7 @@ const completeStory = asyncHandler(async (req, res) => {
     throw new Error('Story non trouvée');
   }
   
-  res.status(200).json({ 
-    success: true,
-    message: "Story completed",
-    data: story 
-  });
+  res.json(story);
 });
 
 module.exports = { 

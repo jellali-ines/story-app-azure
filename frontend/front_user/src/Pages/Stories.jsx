@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import SearchStories from "../components/story/SearchStories";
-import StoriesSection from "../Components/story/StoriesSection";
+import StoriesSection from "../components/story/StoriesSection";
 
 const Stories = ({ 
   currentTheme, 

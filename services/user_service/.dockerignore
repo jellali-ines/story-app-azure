@@ -1,0 +1,72 @@
+# ===================================
+# Backend .dockerignore (Node.js/Express)
+# Path: services/user_service/.dockerignore
+# ===================================
+
+# Dependencies (will be installed in Docker)
+node_modules/
+.pnp/
+.pnp.js
+
+# Environment files (passed as ENV vars)
+.env
+.env.local
+.env.*.local
+*.secret
+
+# Testing
+coverage/
+test/
+tests/
+*.test.js
+*.spec.js
+__tests__/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+logs/
+
+# Cache
+.cache/
+.eslintcache
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Build artifacts (if any)
+dist/
+build/
+
+# Database files (should be external)
+*.sqlite
+*.db
+data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

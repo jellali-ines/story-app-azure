@@ -1,0 +1,61 @@
+# ===================================
+# Root .dockerignore
+# Used when building from project root
+# ===================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+docs/
+LICENSE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Scripts
+deploy_*.sh
+setup_*.sh
+*.env
+
+# Config files
+infra_config.env
+azure_openai_config.env
+
+# Docker
+**/Dockerfile
+**/.dockerignore
+docker-compose*.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+**/*.log
+
+# Testing
+**/coverage/
+**/.pytest_cache/
+**/test_results/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

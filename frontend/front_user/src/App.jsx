@@ -1,29 +1,34 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from './layout/MainLayout';
-import Layout from './layout/Layout';
+import Layout from './layout/layout';
 import useTheme from './hooks/useTheme';
 
 // ================= Lazy Pages =================
+// Lazy loading يسمح بتحميل الـ component فقط عند الحاجة (performance أفضل)
 const StoryLunch = lazy(() => import('./components/story/StoryLunch'));
 
 const HomePage = lazy(() => import('./Pages/HomePage'));
-const GrammarPage = lazy(() => import('./Pages/GrammarPage'));
-const StoryPage = lazy(() => import('./Pages/StoryPage'));
+
+// الصفحات التالية غير موجودة حاليا، لذلك التعليق يمنع أخطاء "is not defined"
+// const GrammarPage = lazy(() => import('./Pages/GrammarPage'));
+// const StoryPage = lazy(() => import('./Pages/StoryPage'));
+
 const AdminPage = lazy(() => import('./Pages/AdminPage'));
 const Stories = lazy(() => import('./Pages/Stories'));
 const Home = lazy(() => import('./Pages/Home'));
 
+// صفحات إدارة قوائم التشغيل والمجلدات
 const AllPlaylistsPage = lazy(() => import('./Pages/AllPlaylistsPage'));
 const FolderDetailPage = lazy(() => import('./Pages/FolderDetailPage'));
 const StoryPagePlaylist = lazy(() => import('./Pages/StoryPagePlaylist'));
 const FoldersPage = lazy(() => import('./Pages/FoldersPage'));
 
+// صفحات التفاصيل والقراءة
 const StoryDetails = lazy(() => import('./components/story/StoryDetails'));
-const ChildProfilesPage = lazy(() => import('./Pages/ProfilesPage'));
 const ReadTheStory = lazy(() => import('./components/story/StoryReader'));
 
-// ⭐ PAGE ÉVALUATION PRONONCIATION
+// ⭐ صفحة تقييم النطق (Speech Evaluation)
 const SpeechEvaluation = lazy(() => import('./Pages/SpeechEvaluation'));
 
 function App() {
@@ -40,13 +45,13 @@ function App() {
       <Suspense
         fallback={
           <div className="min-h-screen flex items-center justify-center text-lg">
-            Chargement...
+            Chargement... {/* رسالة تحميل أثناء lazy loading */}
           </div>
         }
       >
         <Routes>
 
-          {/* ================= AVEC Header + Footer ================= */}
+          {/* ================= Routes مع Header + Footer ================= */}
           <Route
             element={
               <MainLayout
@@ -58,10 +63,12 @@ function App() {
             }
           >
             <Route path="/" element={<HomePage theme={theme} darkMode={darkMode} />} />
-            <Route path="/grammar" element={<GrammarPage theme={theme} darkMode={darkMode} />} />
-            <Route path="/story" element={<StoryPage theme={theme} darkMode={darkMode} />} />
+            
+            {/* الصفحات الغير موجودة حاليا للتعليق */}
+            {/* <Route path="/grammar" element={<GrammarPage theme={theme} darkMode={darkMode} />} /> */}
+            {/* <Route path="/story" element={<StoryPage theme={theme} darkMode={darkMode} />} /> */}
+            
             <Route path="/admin" element={<AdminPage theme={theme} darkMode={darkMode} />} />
-
             <Route path="/playlists" element={<AllPlaylistsPage />} />
             <Route path="/StoryPagePlaylist" element={<StoryPagePlaylist />} />
             <Route path="/folders" element={<FoldersPage />} />
@@ -81,7 +88,7 @@ function App() {
             />
           </Route>
 
-          {/* ================= SANS Header (AVEC Footer) ================= */}
+          {/* ================= Routes بدون Header (مع Footer) ================= */}
           <Route
             element={
               <Layout
@@ -106,7 +113,7 @@ function App() {
             />
           </Route>
 
-          {/* ================= SANS Header NI Footer ================= */}
+          {/* ================= Routes بدون Header و Footer ================= */}
           <Route
             element={
               <Layout
@@ -133,17 +140,18 @@ function App() {
             <Route path="/story/StoryLunch" element={<StoryLunch />} />
             <Route path="/story/listen/:id" element={<StoryLunch />} />
             <Route path="/storyApp" element={<Home />} />
-            <Route path="/profiles" element={<ChildProfilesPage />} />
 
-            {/* ⭐ ROUTE ÉVALUATION PRONONCIATION */}
+            {/* صفحة الملفات الشخصية غير موجودة حاليا */}
+            {/* <Route path="/profiles" element={<ChildProfilesPage />} /> */}
+
+            {/* ⭐ ROUTE تقييم النطق */}
             <Route
               path="/speech-evaluation/:id"
               element={<StoryLunch />}
-              
             />
           </Route>
 
-          {/* ================= 404 ================= */}
+          {/* ================= 404 Page ================= */}
           <Route
             path="*"
             element={

@@ -1,24 +1,37 @@
-# Logs
-logs
-*.log
+# Node.js
+node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Python
+__pycache__/
+*.pyc
+venv/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Environment
+.env
+.env.local
+*.secret
+
+# Docker
+.dockerignore
+
+# IDEs
+.vscode/
+.idea/
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# Build
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sqlite
+data/
+
+# MLOps
+mlruns/
+models/*.pkl

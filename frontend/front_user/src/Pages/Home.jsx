@@ -1,10 +1,9 @@
 import React, { useState } from "react";
-import HeroSection from "../Components/home/HeroSection";
-import SignIn from "../Components/auth/SignIn";
-import FAQSection from "../Components/home/FAQSection";
-import FeaturesSection from "../Components/home/FeaturesSections";
-import Testimonials from "../Components/home/Testimonials";
-import Layout from "../layout/layout";
+import HeroSection from "../components/home/HeroSection";
+import SignIn from "../components/auth/SignIn";
+import FAQSection from "../components/home/FAQSection";
+import FeaturesSection from "../components/home/FeaturesSections";
+import Testimonials from "../components/home/Testimonials";
 const Home = () => {
   const [showSignIn, setShowSignIn] = useState(false);
 

@@ -1,61 +1,41 @@
-# =========================
-# ENV FILES
-# =========================
+# Secrets - CRITICAL
 .env
-.env.local
-.env.development
-.env.production
+.env.*
+*.secret
+*.key
+*_config.env
+azure_openai_config.env
+infra_config.env
+ollama_vm_config.env
 
-# =========================
-# NODE (all services + gateway + frontend)
-# =========================
-**/node_modules/
-**/dist/
-**/build/
-**/.cache/
-**/.vite/
-
+# Node
+node_modules/
 npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
 
-# =========================
-# FRONTEND (React)
-# =========================
-**/build/
-**/.eslintcache
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
 
-# =========================
-# OS FILES
-# =========================
-.DS_Store
-Thumbs.db
+# Build
+dist/
+build/
 
-# =========================
-# IDE
-# =========================
+# Logs
+*.log
+logs/
+
+# IDEs
 .vscode/
 .idea/
+.DS_Store
 
-# =========================
-# LOGS
-# =========================
-*.log
-
-# =========================
-# TEMP FILES
-# =========================
-tmp/
-temp/
-uploads/
-
-# =========================
-# Flask
-# =========================
-**/__pycache__/
-**/venv/
-**/.venv/
-*.pyc
+# Database
+*.sqlite
 *.db
-#minio 
-**/_minio/
+data/
+
+# MLOps
+mlruns/
+models/*.pkl

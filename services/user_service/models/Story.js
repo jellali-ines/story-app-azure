@@ -1,5 +1,11 @@
 const mongoose = require("mongoose");
 
+const QuestionSchema = new mongoose.Schema({
+  question: { type: String },
+  options: [{ type: String }],
+  answer: { type: String }
+}, { _id: false });
+
 const storySchema = new mongoose.Schema({
   story_id: { 
     type: Number, 
@@ -26,7 +32,7 @@ const storySchema = new mongoose.Schema({
     default: false 
   },
   text: String,
-  questions: [String],
+  questions: [QuestionSchema],
   url: String,
   image_url: String,
   transcript: [
@@ -41,7 +47,9 @@ const storySchema = new mongoose.Schema({
       type: Number,
       ref: "Genre"
     }
-  ]
+  ],
+  difficulty: String,
+  rating: Number
 }, { 
   timestamps: true, 
   collection: "Story" 
