@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
-const { notFound, errorHandler } = require("./middleware/errorMiddleware");
+const { notFound, errorHandler } = require("../middleware/errorMiddleware");
 
 dotenv.config();
 
@@ -37,12 +37,12 @@ app.use((req, res, next) => {
 });
 
 // ==================== ROUTES ====================
-const foldersRoutes = require('./routes/folders');
-const playlistsRoutes = require('./routes/playlists');
-const userRoutes = require("./routes/userRoutes");
-const storyRoutes = require("./routes/storyRoutes");
-const historyRoutes = require("./routes/historyRoutes");
-const authRoutes = require("./routes/authRouters");
+const foldersRoutes = require('../routes/folders');
+const playlistsRoutes = require('../routes/playlists');
+const userRoutes = require("../routes/userRoutes");
+const storyRoutes = require("../routes/storyRoutes");
+const historyRoutes = require("../routes/historyRoutes");
+const authRoutes = require("../routes/authRouters");
 
 app.use("/api/folders", foldersRoutes);
 app.use("/api/playlists", playlistsRoutes);
