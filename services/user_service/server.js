@@ -1,3 +1,7 @@
+// 👇 أضف هذا في أول الملف (السطر 1)
+require('./monitoring');
+const monitoring = require('./monitoring');
+
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
@@ -20,6 +24,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// 👇 أضف هذا الـ middleware (لتتبع كل الطلبات)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    monitoring.trackApiCall(req.path, duration, res.statusCode < 400, res.statusCode, {
+      method: req.method
+    });
+  });
+  next();
+});
+
 // ==================== ROUTES ====================
 const foldersRoutes = require('./routes/folders');
 const playlistsRoutes = require('./routes/playlists');
@@ -40,7 +56,9 @@ app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "ok",
     timestamp: new Date(),
-    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    uptime: process.uptime(),
+    ...monitoring.getHealthInfo()
   });
 });
 
@@ -50,6 +68,8 @@ app.get('/api/test', (req, res) => {
 
 // ==================== DATABASE TEST ====================
 app.get('/api/test-db', async (req, res) => {
+  const dbStart = Date.now();
+  
   try {
     // تحقق من حالة الاتصال
     if (mongoose.connection.readyState !== 1) {
@@ -63,6 +83,10 @@ app.get('/api/test-db', async (req, res) => {
     // اختبر الـ ping
     const adminDb = mongoose.connection.db.admin();
     await adminDb.ping();
+    
+    // تتبع عملية DB
+    const dbDuration = Date.now() - dbStart;
+    monitoring.trackDatabaseOperation('ping', dbDuration, 'admin', true);
 
     // احصل على المعلومات
     const stats = await mongoose.connection.db.stats();
@@ -77,6 +101,13 @@ app.get('/api/test-db', async (req, res) => {
     });
   } catch (error) {
     console.error('Database test error:', error);
+    
+    // تتبع الخطأ
+    monitoring.trackException(error, {
+      endpoint: '/api/test-db',
+      context: 'database_test'
+    });
+    
     res.status(500).json({
       status: 'error',
       message: error.message,
@@ -109,20 +140,35 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connecté avec succès");
     console.log(`   Database: ${mongoose.connection.name || 'AppStories'}`);
+    
+    // تتبع الاتصال
+    monitoring.trackEvent('database_connected', {
+      database: mongoose.connection.name || 'AppStories'
+    });
   })
   .catch((err) => {
     console.error("❌ Erreur de connexion MongoDB:");
     console.error(`   ${err.message}`);
+    
+    // تتبع الخطأ
+    monitoring.trackException(err, {
+      context: 'mongodb_connection'
+    });
+    
     process.exit(1);
   });
 
 // Gestion des événements de connexion
 mongoose.connection.on('disconnected', () => {
   console.warn('⚠️  MongoDB disconnected');
+  monitoring.trackEvent('database_disconnected');
 });
 
 mongoose.connection.on('error', (err) => {
   console.error('❌ MongoDB error:', err.message);
+  monitoring.trackException(err, {
+    context: 'mongodb_error'
+  });
 });
 
 // ==================== ERROR MIDDLEWARE ====================
@@ -137,11 +183,22 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`   URL: http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   DB Test: http://localhost:${PORT}/api/test-db`);
+  
+  // تتبع بدء السيرفر
+  monitoring.trackEvent('server_started', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'production'
+  });
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  
+  // تتبع الإيقاف
+  monitoring.trackEvent('server_shutdown');
+  monitoring.flush();
+  
   server.close(() => {
     console.log('HTTP server closed');
     mongoose.connection.close(false, () => {
