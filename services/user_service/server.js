@@ -70,7 +70,7 @@ app.get('/api/test-db', async (req, res) => {
     res.json({
       status: 'success',
       message: 'MongoDB connected successfully',
-      database: mongoose.connection.db.getName(),
+      database: mongoose.connection.name || 'AppStories',
       host: mongoose.connection.host,
       collections: stats.collections,
       dataSize: stats.dataSize
@@ -108,7 +108,7 @@ mongoose
   })
   .then(() => {
     console.log("✅ MongoDB connecté avec succès");
-    console.log(`   Database: ${mongoose.connection.db.getName()}`);
+    console.log(`   Database: ${mongoose.connection.name || 'AppStories'}`);
   })
   .catch((err) => {
     console.error("❌ Erreur de connexion MongoDB:");
