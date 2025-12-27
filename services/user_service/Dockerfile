@@ -32,8 +32,12 @@ WORKDIR /app
 # Copier les dépendances depuis l'étape précédente
 COPY --from=dependencies /app/node_modules ./node_modules
 
-# Copier le code source
-COPY . .
+# 👇 COPIER LE CODE SOURCE (من src/)
+COPY src/ ./src/
+COPY middleware/ ./middleware/
+COPY routes/ ./routes/
+COPY models/ ./models/
+COPY package*.json ./
 
 # Build si nécessaire (par exemple TypeScript)
 # RUN npm run build
@@ -76,4 +80,4 @@ HEALTHCHECK --interval=30s \
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Démarrer l'application
-CMD ["node", "server.js"]
+CMD ["node", "src/server.js"]
