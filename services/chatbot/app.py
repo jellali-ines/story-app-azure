@@ -1,7 +1,8 @@
 """
-Ollama Backend - Production Version for Azure VM
+Ollama Backend - Production Version for Azure VM with Monitoring
 Works with external Ollama server (VM or local)
 ✅ TIMEOUT FIXED: 300 seconds for CPU-only mode
+✅ MONITORING: Application Insights integration
 """
 
 from flask import Flask, request, jsonify
@@ -12,6 +13,9 @@ import time
 from collections import defaultdict
 import logging
 import os
+
+# ================= MONITORING IMPORT =================
+from monitoring import monitoring
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -35,7 +39,6 @@ except ImportError:
 # Ollama Configuration - points to external VM
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama-vm:11434/api/generate")
 MODEL_NAME = os.getenv("MODEL_NAME", "mistral:latest")
-# ✅ TIMEOUT INCREASED TO 300 SECONDS (5 minutes)
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
 
 # Rate limiting
@@ -46,6 +49,26 @@ MAX_REQUESTS_PER_DAY = int(os.getenv("MAX_REQUESTS_PER_DAY", "1000"))
 logger.info(f"Ollama URL: {OLLAMA_URL}")
 logger.info(f"Model: {MODEL_NAME}")
 logger.info(f"✅ Timeout: {OLLAMA_TIMEOUT} seconds")
+
+# ================= MIDDLEWARE =================
+
+@app.before_request
+def before_request():
+    """تسجيل وقت بدء الطلب"""
+    request.start_time = time.time()
+
+@app.after_request
+def after_request(response):
+    """تتبع كل الطلبات"""
+    if hasattr(request, 'start_time'):
+        duration = (time.time() - request.start_time) * 1000
+        monitoring.track_request(
+            endpoint=request.path,
+            status_code=response.status_code,
+            duration=duration,
+            method=request.method
+        )
+    return response
 
 # ================= HELPERS =================
 
@@ -83,12 +106,12 @@ def check_rate_limit(client_ip):
 def check_ollama_status():
     """Check if Ollama server is accessible"""
     try:
-        # Extract base URL (remove /api/generate)
         base_url = OLLAMA_URL.replace('/api/generate', '')
         response = requests.get(f"{base_url}/api/tags", timeout=5)
         return response.status_code == 200
     except Exception as e:
         logger.error(f"Ollama health check failed: {e}")
+        monitoring.track_error('OllamaHealthCheck', str(e), {'context': 'health_check'})
         return False
 
 def build_smart_prompt(user_message, story_context):
@@ -260,6 +283,10 @@ def call_ollama(user_message, story_context):
     """Call Ollama API with smart prompts"""
     
     logger.info(f"Processing question: {user_message[:50]}...")
+    monitoring.track_event('chat_request', {
+        'message_length': len(user_message),
+        'model': MODEL_NAME
+    })
     
     try:
         start_time = time.time()
@@ -277,7 +304,7 @@ def call_ollama(user_message, story_context):
         
         logger.info(f"Question complexity: {'high' if is_complex else 'normal'}")
         
-        # Call Ollama with ✅ INCREASED TIMEOUT
+        # Call Ollama with INCREASED TIMEOUT
         response = requests.post(
             OLLAMA_URL,
             json={
@@ -292,7 +319,7 @@ def call_ollama(user_message, story_context):
                     "num_thread": 4
                 }
             },
-            timeout=OLLAMA_TIMEOUT  # ✅ 300 seconds
+            timeout=OLLAMA_TIMEOUT
         )
         
         end_time = time.time()
@@ -311,6 +338,21 @@ def call_ollama(user_message, story_context):
             
             logger.info(f"Response generated: {len(reply)} chars, {response_time}s")
             
+            # تتبع الاستدعاء الناجح
+            monitoring.track_inference(
+                model=MODEL_NAME,
+                prompt_tokens=len(user_message.split()),
+                response_tokens=len(reply.split()),
+                duration=response_time * 1000,
+                success=True
+            )
+            
+            monitoring.track_event('chat_completed', {
+                'model': MODEL_NAME,
+                'response_length': len(reply),
+                'response_time': response_time
+            })
+            
             return {
                 'reply': reply,
                 'response_time': response_time,
@@ -319,25 +361,40 @@ def call_ollama(user_message, story_context):
         else:
             error_msg = f"Ollama error {response.status_code}"
             logger.error(error_msg)
+            
+            # تتبع الخطأ
+            monitoring.track_inference(
+                model=MODEL_NAME,
+                prompt_tokens=len(user_message.split()),
+                response_tokens=0,
+                duration=response_time * 1000,
+                success=False
+            )
+            
+            monitoring.track_error('OllamaError', error_msg, {'status_code': response.status_code})
+            
             return {
                 'error': error_msg,
                 'status': 'error'
             }
     
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
         logger.error("Cannot connect to Ollama server")
+        monitoring.track_error('OllamaConnectionError', str(e), {'context': 'chat_request'})
         return {
             'error': f'Cannot connect to Ollama at {OLLAMA_URL}',
             'status': 'error'
         }
     except requests.exceptions.Timeout:
         logger.error(f"Request timeout after {OLLAMA_TIMEOUT}s")
+        monitoring.track_error('OllamaTimeout', f'Timeout after {OLLAMA_TIMEOUT}s', {'context': 'chat_request'})
         return {
             'error': f'Request timeout (model is slow on CPU)',
             'status': 'timeout'
         }
     except Exception as e:
         logger.error(f"Ollama exception: {e}")
+        monitoring.track_error('OllamaException', str(e), {'context': 'chat_request'})
         return {
             'error': str(e),
             'status': 'error'
@@ -349,6 +406,10 @@ def call_ollama(user_message, story_context):
 def health():
     """Health check endpoint"""
     ollama_status = check_ollama_status()
+    
+    monitoring.track_event('health_check', {
+        'ollama_status': 'connected' if ollama_status else 'disconnected'
+    })
     
     return jsonify({
         'status': 'OK' if ollama_status else 'Ollama not reachable',
@@ -371,9 +432,11 @@ def health():
 @app.route('/api/test', methods=['GET'])
 def test():
     """Test endpoint"""
+    monitoring.track_event('test_endpoint_called')
+    
     return jsonify({
         'message': 'Backend is working! 🎉',
-        'version': '2.1 - Ollama VM (Timeout Fixed)',
+        'version': '2.1 - Ollama VM (Timeout Fixed + Monitoring)',
         'status': 'ok',
         'ollama_reachable': check_ollama_status(),
         'timeout': f'{OLLAMA_TIMEOUT}s',
@@ -389,6 +452,11 @@ def get_stats():
     client_ip = get_client_ip()
     daily = len(rate_limit_storage[client_ip]['day'])
     remaining = max(0, MAX_REQUESTS_PER_DAY - daily)
+    
+    monitoring.track_event('stats_requested', {
+        'daily_requests': daily,
+        'remaining': remaining
+    })
     
     return jsonify({
         'requests_today': daily,
@@ -408,6 +476,7 @@ def chat():
         client_ip = get_client_ip()
         allowed, err = check_rate_limit(client_ip)
         if not allowed:
+            monitoring.track_error('RateLimitExceeded', err, {'client_ip': client_ip})
             return jsonify({
                 'error': err,
                 'status': 'rate_limit_exceeded'
@@ -419,10 +488,12 @@ def chat():
         story_context = data.get('story_context', '')
         
         if not user_message:
+            monitoring.track_error('MissingMessage', 'Message field is required')
             return jsonify({'error': 'Message required'}), 400
         
         # Check Ollama availability
         if not check_ollama_status():
+            monitoring.track_error('OllamaUnavailable', f'Ollama not reachable at {OLLAMA_URL}')
             return jsonify({
                 'error': f'Ollama server not reachable at {OLLAMA_URL}',
                 'status': 'error'
@@ -443,6 +514,7 @@ def chat():
     
     except Exception as e:
         logger.error(f"Error in /api/chat: {e}")
+        monitoring.track_error('ChatEndpointError', str(e), {'endpoint': '/api/chat'})
         return jsonify({
             'error': str(e),
             'status': 'error'
@@ -459,6 +531,7 @@ def explain_word():
         client_ip = get_client_ip()
         allowed, err = check_rate_limit(client_ip)
         if not allowed:
+            monitoring.track_error('RateLimitExceeded', err, {'endpoint': '/api/explain-word'})
             return jsonify({'error': err}), 429
         
         # Get request data
@@ -474,6 +547,7 @@ def explain_word():
             return jsonify({'error': 'Ollama not reachable'}), 503
         
         logger.info(f"Explaining word: {word}")
+        monitoring.track_event('word_explanation_requested', {'word': word})
         
         # Build prompt for word explanation
         prompt = f"""You are teaching a child about words.
@@ -492,7 +566,8 @@ INSTRUCTIONS:
 Explanation:"""
         
         try:
-            # ✅ TIMEOUT INCREASED HERE TOO
+            inference_start = time.time()
+            
             response = requests.post(
                 OLLAMA_URL,
                 json={
@@ -505,8 +580,10 @@ Explanation:"""
                         "top_p": 0.9
                     }
                 },
-                timeout=OLLAMA_TIMEOUT  # ✅ 300 seconds
+                timeout=OLLAMA_TIMEOUT
             )
+            
+            inference_duration = (time.time() - inference_start) * 1000
             
             if response.status_code == 200:
                 data_response = response.json()
@@ -519,12 +596,27 @@ Explanation:"""
                 if explanation.lower().startswith('explanation:'):
                     explanation = explanation[12:].strip()
                 
+                # تتبع النجاح
+                monitoring.track_inference(
+                    model=MODEL_NAME,
+                    prompt_tokens=len(word.split()),
+                    response_tokens=len(explanation.split()),
+                    duration=inference_duration,
+                    success=True
+                )
+                
+                monitoring.track_event('word_explanation_completed', {
+                    'word': word,
+                    'explanation_length': len(explanation)
+                })
+                
                 return jsonify({
                     'word': word,
                     'explanation': explanation,
                     'status': 'success'
                 }), 200
             else:
+                monitoring.track_error('WordExplanationError', f'Status {response.status_code}')
                 return jsonify({
                     'error': 'Failed to get explanation',
                     'status': 'error'
@@ -532,12 +624,14 @@ Explanation:"""
         
         except requests.exceptions.Timeout:
             logger.error(f"Word explanation timeout after {OLLAMA_TIMEOUT}s")
+            monitoring.track_error('WordExplanationTimeout', f'Timeout after {OLLAMA_TIMEOUT}s')
             return jsonify({
                 'error': 'Request timeout - model is processing slowly',
                 'status': 'timeout'
             }), 504
         except Exception as e:
             logger.error(f"Word explanation error: {e}")
+            monitoring.track_error('WordExplanationException', str(e), {'word': word})
             return jsonify({
                 'error': str(e),
                 'status': 'error'
@@ -545,31 +639,58 @@ Explanation:"""
     
     except Exception as e:
         logger.error(f"Error in /api/explain-word: {e}")
+        monitoring.track_error('ExplainWordEndpointError', str(e))
         return jsonify({'error': str(e)}), 500
 
 # ================= ERROR HANDLERS =================
 
 @app.errorhandler(404)
 def not_found(error):
+    monitoring.track_error('NotFound', 'Endpoint not found')
     return jsonify({'error': 'Endpoint not found'}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"Internal error: {error}")
+    monitoring.track_error('InternalError', str(error))
     return jsonify({'error': 'Internal server error'}), 500
+
+# ================= GRACEFUL SHUTDOWN =================
+
+import signal
+
+def shutdown_handler(signum, frame):
+    """معالج الإيقاف الآمن"""
+    logger.info('Shutting down gracefully...')
+    monitoring.track_event('chatbot_shutdown', {
+        'timestamp': datetime.now().isoformat()
+    })
+    monitoring.flush()
+    exit(0)
+
+signal.signal(signal.SIGTERM, shutdown_handler)
+signal.signal(signal.SIGINT, shutdown_handler)
 
 # ================= MAIN =================
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 Story App - Ollama VM Backend")
+    print("🚀 Story App - Ollama VM Backend with Monitoring")
     print("="*70)
     print(f"📍 Flask:      http://localhost:5002")
     print(f"🦙 Ollama URL: {OLLAMA_URL}")
     print(f"🤖 Model:      {MODEL_NAME}")
     print(f"⏱️  Timeout:    {OLLAMA_TIMEOUT} seconds")
     print(f"🚦 Limits:     {MAX_REQUESTS_PER_MINUTE}/min, {MAX_REQUESTS_PER_DAY}/day")
+    print(f"📊 Monitoring: ✅ Enabled")
     print("="*70 + "\n")
+    
+    # Track startup
+    monitoring.track_event('chatbot_started', {
+        'model': MODEL_NAME,
+        'timeout': OLLAMA_TIMEOUT,
+        'port': 5002
+    })
     
     # Check Ollama status
     print("🔍 Checking Ollama server...")
