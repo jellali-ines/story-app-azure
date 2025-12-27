@@ -1,6 +1,6 @@
 // 👇 أضف هذا في أول الملف (السطر 1)
-require('../monitoring');
-const monitoring = require('../monitoring');
+require('./monitoring');
+const monitoring = require('./monitoring');
 
 const express = require("express");
 const mongoose = require("mongoose");
