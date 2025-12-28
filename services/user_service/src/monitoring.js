@@ -1,7 +1,6 @@
-// src/monitoring.js
 const appInsights = require('applicationinsights');
 
-// تهيئة Application Insights مع Live Metrics
+// تهيئة Application Insights
 if (process.env.APPINSIGHTS_CONNECTION_STRING) {
   appInsights
     .setup(process.env.APPINSIGHTS_CONNECTION_STRING)
@@ -10,7 +9,7 @@ if (process.env.APPINSIGHTS_CONNECTION_STRING) {
     .setAutoCollectPerformance(true, true)
     .setAutoCollectExceptions(true)
     .setAutoCollectDependencies(true)
-    .setAutoCollectConsole(true, false)  // false لتقليل الضوضاء
+    .setAutoCollectConsole(true, false)
     .setUseDiskRetryCaching(true)
     .setSendLiveMetrics(true)
     .setDistributedTracingMode(appInsights.DistributedTracingModes.AI_AND_W3C)
@@ -20,63 +19,63 @@ if (process.env.APPINSIGHTS_CONNECTION_STRING) {
   console.log('   Connection String: ' + process.env.APPINSIGHTS_CONNECTION_STRING.substring(0, 60) + '...');
   console.log('   Auto-collect Requests: ENABLED');
   console.log('   Live Metrics: ENABLED');
-} else {
-  console.log('⚠️  APPINSIGHTS_CONNECTION_STRING not found');
 }
 
+// ✅ احصل على client بعد start()
 const client = appInsights.defaultClient;
 
 class MonitoringService {
-  // Track API calls
   trackApiCall(endpoint, duration, success, statusCode = 200, metadata = {}) {
     if (!client) return;
-    
-    client.trackRequest({
-      name: endpoint,
-      url: endpoint,
-      duration: duration,
-      resultCode: statusCode,
-      success: success,
-      properties: metadata
-    });
+    try {
+      client.trackRequest({
+        name: endpoint,
+        url: endpoint,
+        duration: duration,
+        resultCode: statusCode,
+        success: success,
+        properties: metadata
+      });
+    } catch (err) {
+      console.error('Error tracking API call:', err.message);
+    }
   }
 
-  // Track database operations
   trackDatabaseOperation(operation, duration, collection, success = true) {
     if (!client) return;
-    
-    client.trackDependency({
-      target: 'MongoDB',
-      name: operation,
-      data: collection,
-      duration: duration,
-      resultCode: success ? 0 : 1,
-      success: success,
-      dependencyTypeName: 'MongoDB'
-    });
+    try {
+      client.trackDependency({
+        target: 'MongoDB',
+        name: operation,
+        data: collection,
+        duration: duration,
+        resultCode: success ? 0 : 1,
+        success: success,
+        dependencyTypeName: 'MongoDB'
+      });
+    } catch (err) {
+      console.error('Error tracking DB operation:', err.message);
+    }
   }
 
-  // Track events
   trackEvent(name, properties = {}) {
     if (!client) return;
-    
-    client.trackEvent({
-      name: name,
-      properties: properties
-    });
+    try {
+      client.trackEvent({ name, properties });
+    } catch (err) {
+      console.error('Error tracking event:', err.message);
+    }
   }
 
-  // Track exceptions
   trackException(error, properties = {}) {
     if (!client) return;
-    
-    client.trackException({
-      exception: error,
-      properties: properties
-    });
+    try {
+      client.trackException({ exception: error, properties });
+    } catch (err) {
+      console.error('Error tracking exception:', err.message);
+    }
   }
 
-  // Get health info
   getHealthInfo() {
     const mem = process.memoryUsage();
     return {
@@ -85,15 +84,17 @@ class MonitoringService {
         heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB'
       },
       uptime: Math.round(process.uptime()) + 's',
-      appInsightsEnabled: !!client,
-      liveMetricsEnabled: true
+      appInsightsEnabled: !!client
     };
   }
 
-  // Flush data
   flush() {
     if (client) {
-      client.flush();
+      try {
+        client.flush();
+      } catch (err) {
+        console.error('Error flushing:', err.message);
+      }
     }
   }
 }
