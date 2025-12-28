@@ -11,29 +11,37 @@ let isInitialized = false;
 
 if (conn) {
   try {
-    appInsights
-      .setup(conn)
+    // تهيئة بسيطة وآمنة
+    appInsights.setup(conn);
+    
+    // تفعيل الميزات الأساسية فقط
+    appInsights.Configuration
       .setAutoDependencyCorrelation(true)
       .setAutoCollectRequests(true)
-      .setAutoCollectPerformance(true, true)
+      .setAutoCollectPerformance(true)
       .setAutoCollectExceptions(true)
       .setAutoCollectDependencies(true)
-      .setAutoCollectConsole(true, false)
-      .setUseDiskRetryCaching(true)
-      .setSendLiveMetrics(true)
-      .setDistributedTracingMode(appInsights.DistributedTracingModes.AI_AND_W3C)
-      .start();
-
-    client = appInsights.defaultClient;
-    isInitialized = true;
+      .setAutoCollectConsole(true);
     
-    console.log('✅ Application Insights initialized');
-    console.log('   Connection String: ' + conn.substring(0, 60) + '...');
-    console.log('   Auto-collect Requests: ENABLED');
-    console.log('   Live Metrics: ENABLED');
+    // بدء التتبع
+    appInsights.start();
+    
+    client = appInsights.defaultClient;
+    
+    if (client) {
+      isInitialized = true;
+      console.log('✅ Application Insights initialized');
+      console.log('   Connection String: ' + conn.substring(0, 60) + '...');
+      console.log('   Auto-collect Requests: ENABLED');
+      console.log('   Live Metrics: ENABLED');
+    } else {
+      console.error('⚠️ Application Insights client not available');
+    }
   } catch (err) {
     console.error('⚠️ Failed to initialize Application Insights:', err.message);
+    console.error('   Stack:', err.stack);
     isInitialized = false;
+    client = null;
   }
 } else {
   console.log('⚠️ Application Insights disabled (no connection string)');
@@ -48,12 +56,10 @@ class MonitoringService {
     this.isInitialized = isInitialized;
   }
 
-  // تحقق من التهيئة
   _isReady() {
     return this.isInitialized && this.client;
   }
 
-  // تتبع أي حدث (Event)
   trackEvent(name, properties = {}) {
     if (!this._isReady()) return;
     
@@ -64,7 +70,6 @@ class MonitoringService {
     }
   }
 
-  // تتبع استدعاءات API
   trackApiCall(endpoint, duration, success, statusCode = 200, metadata = {}) {
     if (!this._isReady()) return;
     
@@ -82,7 +87,6 @@ class MonitoringService {
     }
   }
 
-  // تتبع العمليات على قاعدة البيانات
   trackDatabaseOperation(operation, duration, collection, success = true) {
     if (!this._isReady()) return;
     
@@ -101,7 +105,6 @@ class MonitoringService {
     }
   }
 
-  // تتبع الاستثناءات
   trackException(error, properties = {}) {
     if (!this._isReady()) return;
     
@@ -115,7 +118,6 @@ class MonitoringService {
     }
   }
 
-  // معلومات صحية عن التطبيق
   getHealthInfo() {
     const mem = process.memoryUsage();
     return {
@@ -128,28 +130,31 @@ class MonitoringService {
     };
   }
 
-  // إرسال البيانات المتبقية قبل الإغلاق
   async flush() {
     if (!this._isReady()) return;
     
     try {
-      // استخدام Promise لضمان الـ flush
+      // flush بسيط وآمن
       await new Promise((resolve) => {
-        this.client.flush({
-          callback: (response) => {
-            console.log('✅ Application Insights flushed successfully');
-            resolve(response);
-          }
-        });
-        
-        // Timeout بعد 5 ثوان
-        setTimeout(() => {
-          console.log('⚠️ Flush timeout after 5s');
+        try {
+          this.client.flush({
+            callback: (response) => {
+              console.log('✅ Application Insights flushed');
+              resolve(response);
+            }
+          });
+        } catch (err) {
+          console.error('Flush error:', err.message);
           resolve();
-        }, 5000);
+        }
+        
+        // Timeout بعد 3 ثوان
+        setTimeout(() => {
+          resolve();
+        }, 3000);
       });
     } catch (err) {
-      console.error('Error flushing Application Insights:', err.message);
+      console.error('Error flushing:', err.message);
     }
   }
 }
