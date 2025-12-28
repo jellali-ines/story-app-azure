@@ -82,3 +82,4 @@ ENTRYPOINT ["/sbin/tini", "--"]
 
 # Démarrer l'application
 CMD ["node", "src/server.js"]
+# Rebuild with applicationinsights v2.9.5 - 20251228-152539
