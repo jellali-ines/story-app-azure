@@ -14,14 +14,16 @@ if (conn) {
     // تهيئة بسيطة وآمنة
     appInsights.setup(conn);
     
-    // تفعيل الميزات الأساسية فقط
+    // تفعيل الميزات الأساسية
     appInsights.Configuration
       .setAutoDependencyCorrelation(true)
       .setAutoCollectRequests(true)
-      .setAutoCollectPerformance(true)
+      .setAutoCollectPerformance(true, true)
       .setAutoCollectExceptions(true)
       .setAutoCollectDependencies(true)
-      .setAutoCollectConsole(true);
+      .setAutoCollectConsole(true)
+      .setUseDiskRetryCaching(true)
+      .setSendLiveMetrics(true);  // ✅ تفعيل Live Metrics
     
     // بدء التتبع
     appInsights.start();
