@@ -1,9 +1,14 @@
 const appInsights = require('applicationinsights');
 
-// تهيئة Application Insights
-if (process.env.APPINSIGHTS_CONNECTION_STRING) {
+// 🔐 Récupération correcte de la variable Azure
+const conn = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+
+// =====================
+// Initialisation AI
+// =====================
+if (conn) {
   appInsights
-    .setup(process.env.APPINSIGHTS_CONNECTION_STRING)
+    .setup(conn)
     .setAutoDependencyCorrelation(true)
     .setAutoCollectRequests(true)
     .setAutoCollectPerformance(true, true)
@@ -14,26 +19,38 @@ if (process.env.APPINSIGHTS_CONNECTION_STRING) {
     .setSendLiveMetrics(true)
     .setDistributedTracingMode(appInsights.DistributedTracingModes.AI_AND_W3C)
     .start();
-  
+
   console.log('✅ Application Insights initialized');
-  console.log('   Connection String: ' + process.env.APPINSIGHTS_CONNECTION_STRING.substring(0, 60) + '...');
+  console.log('   Connection String: ' + conn.substring(0, 60) + '...');
   console.log('   Auto-collect Requests: ENABLED');
   console.log('   Live Metrics: ENABLED');
+} else {
+  console.log('⚠️ Application Insights disabled (no connection string)');
 }
 
-// ✅ احصل على client بعد start()
+// =====================
+// Client sécurisé
+// =====================
 const client = appInsights.defaultClient;
 
+if (!client) {
+  console.log("⚠️ Application Insights client not available");
+}
+
+// =====================
+// Monitoring Service
+// =====================
 class MonitoringService {
+
   trackApiCall(endpoint, duration, success, statusCode = 200, metadata = {}) {
     if (!client) return;
     try {
       client.trackRequest({
         name: endpoint,
         url: endpoint,
-        duration: duration,
+        duration,
         resultCode: statusCode,
-        success: success,
+        success,
         properties: metadata
       });
     } catch (err) {
@@ -48,9 +65,9 @@ class MonitoringService {
         target: 'MongoDB',
         name: operation,
         data: collection,
-        duration: duration,
+        duration,
         resultCode: success ? 0 : 1,
-        success: success,
+        success,
         dependencyTypeName: 'MongoDB'
       });
     } catch (err) {
