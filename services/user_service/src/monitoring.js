@@ -1,3 +1,8 @@
+process.env.APPLICATIONINSIGHTS_CONFIGURATION_CONTENT = "";
+process.env.AZURE_MONITOR_OPENTELEMETRY_EXPORTER = "disabled";
+
+
+
 const appInsights = require('applicationinsights');
 
 // 🔐 Récupération correcte de la variable Azure
