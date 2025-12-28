@@ -1,22 +1,25 @@
 // src/monitoring.js
 const appInsights = require('applicationinsights');
 
-// تهيئة Application Insights
+// تهيئة Application Insights مع Live Metrics
 if (process.env.APPINSIGHTS_CONNECTION_STRING) {
   appInsights
     .setup(process.env.APPINSIGHTS_CONNECTION_STRING)
     .setAutoDependencyCorrelation(true)
-    .setAutoCollectRequests(true)           // ✅ يتتبع HTTP requests تلقائياً
+    .setAutoCollectRequests(true)
     .setAutoCollectPerformance(true, true)
     .setAutoCollectExceptions(true)
     .setAutoCollectDependencies(true)
-    .setAutoCollectConsole(true, true)
+    .setAutoCollectConsole(true, false)  // false لتقليل الضوضاء
     .setUseDiskRetryCaching(true)
-    .setSendLiveMetrics(true)               // ✅ لـ Live Metrics
+    .setSendLiveMetrics(true)
+    .setDistributedTracingMode(appInsights.DistributedTracingModes.AI_AND_W3C)
     .start();
   
   console.log('✅ Application Insights initialized');
+  console.log('   Connection String: ' + process.env.APPINSIGHTS_CONNECTION_STRING.substring(0, 60) + '...');
   console.log('   Auto-collect Requests: ENABLED');
+  console.log('   Live Metrics: ENABLED');
 } else {
   console.log('⚠️  APPINSIGHTS_CONNECTION_STRING not found');
 }
@@ -24,11 +27,10 @@ if (process.env.APPINSIGHTS_CONNECTION_STRING) {
 const client = appInsights.defaultClient;
 
 class MonitoringService {
-  // Track API calls كـ Requests (ليس Metrics!)
+  // Track API calls
   trackApiCall(endpoint, duration, success, statusCode = 200, metadata = {}) {
     if (!client) return;
     
-    // استخدم trackRequest بدلاً من trackMetric
     client.trackRequest({
       name: endpoint,
       url: endpoint,
@@ -39,11 +41,10 @@ class MonitoringService {
     });
   }
 
-  // Track database operations كـ Dependencies
+  // Track database operations
   trackDatabaseOperation(operation, duration, collection, success = true) {
     if (!client) return;
     
-    // استخدم trackDependency بدلاً من trackMetric
     client.trackDependency({
       target: 'MongoDB',
       name: operation,
@@ -55,7 +56,7 @@ class MonitoringService {
     });
   }
 
-  // Track business events
+  // Track events
   trackEvent(name, properties = {}) {
     if (!client) return;
     
@@ -65,7 +66,7 @@ class MonitoringService {
     });
   }
 
-  // Track errors with context
+  // Track exceptions
   trackException(error, properties = {}) {
     if (!client) return;
     
@@ -84,7 +85,8 @@ class MonitoringService {
         heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB'
       },
       uptime: Math.round(process.uptime()) + 's',
-      appInsightsEnabled: !!client
+      appInsightsEnabled: !!client,
+      liveMetricsEnabled: true
     };
   }
 
