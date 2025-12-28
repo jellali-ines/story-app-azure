@@ -1,7 +1,7 @@
-// 👇 أضف هذا في أول الملف (السطر 1)
-require('./monitoring');
+// ==================== MONITORING (يجب أن يكون أول شيء) ====================
 const monitoring = require('./monitoring');
 
+// ==================== DEPENDENCIES ====================
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
@@ -15,24 +15,28 @@ const app = express();
 
 // ==================== MIDDLEWARE ====================
 // CORS - السماح لكل المصادر
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors({ origin: "*" }));
 
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// 👇 أضف هذا الـ middleware (لتتبع كل الطلبات)
+// 📊 Middleware لتتبع كل الطلبات
 app.use((req, res, next) => {
   const start = Date.now();
+  
   res.on('finish', () => {
     const duration = Date.now() - start;
-    monitoring.trackApiCall(req.path, duration, res.statusCode < 400, res.statusCode, {
-      method: req.method
-    });
+    monitoring.trackApiCall(
+      req.path,
+      duration,
+      res.statusCode < 400,
+      res.statusCode,
+      { method: req.method }
+    );
   });
+  
   next();
 });
 
@@ -53,7 +57,7 @@ app.use("/api/history", historyRoutes);
 
 // ==================== HEALTH CHECK ====================
 app.get("/health", (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: "ok",
     timestamp: new Date(),
     database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
@@ -83,7 +87,7 @@ app.get('/api/test-db', async (req, res) => {
     // اختبر الـ ping
     const adminDb = mongoose.connection.db.admin();
     await adminDb.ping();
-    
+
     // تتبع عملية DB
     const dbDuration = Date.now() - dbStart;
     monitoring.trackDatabaseOperation('ping', dbDuration, 'admin', true);
@@ -107,7 +111,7 @@ app.get('/api/test-db', async (req, res) => {
       endpoint: '/api/test-db',
       context: 'database_test'
     });
-    
+
     res.status(500).json({
       status: 'error',
       message: error.message,
@@ -117,7 +121,6 @@ app.get('/api/test-db', async (req, res) => {
 });
 
 // ==================== MONGO CONNECTION ====================
-// استخدم MONGO_URI أولاً، ثم fallback إلى MONGODB_ATLAS_URI
 const mongoUri = process.env.MONGO_URI || process.env.MONGODB_ATLAS_URI;
 
 if (!mongoUri) {
@@ -151,24 +154,19 @@ mongoose
     console.error(`   ${err.message}`);
     
     // تتبع الخطأ
-    monitoring.trackException(err, {
-      context: 'mongodb_connection'
-    });
-    
+    monitoring.trackException(err, { context: 'mongodb_connection' });
     process.exit(1);
   });
 
 // Gestion des événements de connexion
 mongoose.connection.on('disconnected', () => {
-  console.warn('⚠️  MongoDB disconnected');
+  console.warn('⚠️ MongoDB disconnected');
   monitoring.trackEvent('database_disconnected');
 });
 
 mongoose.connection.on('error', (err) => {
   console.error('❌ MongoDB error:', err.message);
-  monitoring.trackException(err, {
-    context: 'mongodb_error'
-  });
+  monitoring.trackException(err, { context: 'mongodb_error' });
 });
 
 // ==================== ERROR MIDDLEWARE ====================
@@ -191,19 +189,42 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+// ==================== GRACEFUL SHUTDOWN ====================
+const shutdown = (signal) => {
+  console.log(`${signal} signal received: closing HTTP server`);
   
   // تتبع الإيقاف
-  monitoring.trackEvent('server_shutdown');
+  monitoring.trackEvent('server_shutdown', { signal });
   monitoring.flush();
-  
+
   server.close(() => {
     console.log('HTTP server closed');
+    
     mongoose.connection.close(false, () => {
       console.log('MongoDB connection closed');
       process.exit(0);
     });
   });
+  
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  monitoring.trackException(err, { context: 'uncaught_exception' });
+  monitoring.flush();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  monitoring.trackException(new Error(reason), { context: 'unhandled_rejection' });
 });

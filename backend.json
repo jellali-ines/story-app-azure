@@ -1,0 +1,185 @@
+{
+  "id": "/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/rg-storytelling5/providers/Microsoft.App/containerapps/backend",
+  "identity": {
+    "type": "None"
+  },
+  "location": "Italy North",
+  "name": "backend",
+  "properties": {
+    "configuration": {
+      "activeRevisionsMode": "Single",
+      "dapr": null,
+      "identitySettings": [],
+      "ingress": {
+        "additionalPortMappings": null,
+        "allowInsecure": false,
+        "clientCertificateMode": null,
+        "corsPolicy": null,
+        "customDomains": null,
+        "exposedPort": 0,
+        "external": true,
+        "fqdn": "backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io",
+        "ipSecurityRestrictions": null,
+        "stickySessions": null,
+        "targetPort": 5000,
+        "targetPortHttpScheme": null,
+        "traffic": [
+          {
+            "latestRevision": true,
+            "weight": 100
+          }
+        ],
+        "transport": "Auto"
+      },
+      "maxInactiveRevisions": 100,
+      "registries": [
+        {
+          "identity": "",
+          "passwordSecretRef": "acrstory606755azurecrio-acrstory606755",
+          "server": "acrstory606755.azurecr.io",
+          "username": "acrstory606755"
+        }
+      ],
+      "revisionTransitionThreshold": null,
+      "runtime": null,
+      "secrets": [
+        {
+          "name": "acrstory606755azurecrio-acrstory606755"
+        },
+        {
+          "name": "appinsights-key"
+        },
+        {
+          "name": "appinsightskey"
+        }
+      ],
+      "service": null,
+      "targetLabel": ""
+    },
+    "customDomainVerificationId": "50814E7286E4267537E11EEA53287F88DADC1921DB80B17B9372F8AC08BA94A6",
+    "delegatedIdentities": [],
+    "environmentId": "/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/rg-storytelling5/providers/Microsoft.App/managedEnvironments/env-storytelling",
+    "eventStreamEndpoint": "https://italynorth.azurecontainerapps.dev/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/rg-storytelling5/containerApps/backend/eventstream",
+    "latestReadyRevisionName": "backend--0000042",
+    "latestRevisionFqdn": "backend--0000042.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io",
+    "latestRevisionName": "backend--0000042",
+    "managedEnvironmentId": "/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/rg-storytelling5/providers/Microsoft.App/managedEnvironments/env-storytelling",
+    "outboundIpAddresses": [
+      "4.232.216.223",
+      "4.232.216.232",
+      "4.232.216.240",
+      "4.232.216.233",
+      "172.213.194.172",
+      "172.213.194.150",
+      "172.213.194.184",
+      "172.213.194.148",
+      "172.213.194.157",
+      "172.213.194.146",
+      "4.232.216.124",
+      "4.232.216.181",
+      "4.232.216.239",
+      "4.232.216.96",
+      "172.213.196.51",
+      "172.213.196.82",
+      "172.213.196.79",
+      "172.213.196.80",
+      "172.213.196.77",
+      "172.213.196.65",
+      "4.232.189.182",
+      "172.213.216.24",
+      "72.146.29.76",
+      "72.146.14.133",
+      "72.146.14.138",
+      "172.213.210.149",
+      "4.232.189.91",
+      "4.232.189.225",
+      "172.213.216.88",
+      "172.213.226.119",
+      "9.235.123.108"
+    ],
+    "patchingMode": "Automatic",
+    "provisioningState": "Succeeded",
+    "runningStatus": "Running",
+    "template": {
+      "containers": [
+        {
+          "env": [
+            {
+              "name": "NODE_ENV",
+              "value": "production"
+            },
+            {
+              "name": "PORT",
+              "value": "5000"
+            },
+            {
+              "name": "MONGODB_URI",
+              "value": "mongodb+srv://admin:BM0a7A1cwkcopozO@cluster0.l3awpvu.mongodb.net/AppStories"
+            },
+            {
+  "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+  "secretRef": "appinsights-key"
+}
+,
+            {
+              "name": "MONGO_URI",
+              "value": "mongodb+srv://admin:BM0a7A1cwkcopozO@cluster0.l3awpvu.mongodb.net/AppStories"
+            },
+            {
+              "name": "JWT_SECRET",
+              "value": "supersecretkey"
+            },
+            {
+              "name": "MONGODB_ATLAS_URI",
+              "value": "mongodb+srv://admin:BM0a7A1cwkcopozO@cluster0.l3awpvu.mongodb.net/AppStories"
+            },
+            
+            {
+              "name": "AZURE_MONITOR_OPENTELEMETRY_EXPORTER",
+              "value": "disabled"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONFIGURATION_CONTENT",
+              "value": ""
+            },
+            {
+              "name": "configuration",
+              "value": "@env.json"
+            }
+          ],
+          "image": "acrstory606755.azurecr.io/backend:latest",
+          "imageType": "ContainerImage",
+          "name": "backend",
+          "resources": {
+            "cpu": 0.5,
+            "ephemeralStorage": "2Gi",
+            "memory": "1Gi"
+          }
+        }
+      ],
+      "initContainers": null,
+      "revisionSuffix": "",
+      "scale": {
+        "cooldownPeriod": 300,
+        "maxReplicas": 3,
+        "minReplicas": 1,
+        "pollingInterval": 30,
+        "rules": null
+      },
+      "serviceBinds": null,
+      "terminationGracePeriodSeconds": null,
+      "volumes": null
+    },
+    "workloadProfileName": "Consumption"
+  },
+  "resourceGroup": "rg-storytelling5",
+  "systemData": {
+    "createdAt": "2025-12-25T21:15:47.8186076",
+    "createdBy": "ines.jellali@polytechnicien.tn",
+    "createdByType": "User",
+    "lastModifiedAt": "2025-12-28T08:48:02.0059222",
+    "lastModifiedBy": "ines.jellali@polytechnicien.tn",
+    "lastModifiedByType": "User"
+  },
+  "type": "Microsoft.App/containerApps"
+}

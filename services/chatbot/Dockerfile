@@ -1,5 +1,5 @@
 # ===================================
-# Dockerfile pour AI Backend Flask (Sans Ollama intégré)
+# Dockerfile pour AI Backend Flask avec Monitoring
 # Note: Ollama doit tourner dans un conteneur séparé
 # ===================================
 FROM python:3.9-slim
@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le code
+# 👇 COPIER LES FICHIERS PYTHON
 COPY app.py .
+COPY monitoring.py .
 
 # Exposer le port
 EXPOSE 5002
