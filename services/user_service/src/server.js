@@ -132,10 +132,9 @@ if (!mongoUri) {
 console.log(`🔗 Connecting to MongoDB...`);
 console.log(`   URI: ${mongoUri.substring(0, 50)}...`);
 
+// ✅ إزالة useNewUrlParser و useUnifiedTopology (deprecated)
 mongoose
   .connect(mongoUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     maxPoolSize: 10,
     retryWrites: true,
     w: 'majority'
@@ -190,25 +189,32 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 });
 
 // ==================== GRACEFUL SHUTDOWN ====================
-const shutdown = (signal) => {
+const shutdown = async (signal) => {
   console.log(`${signal} signal received: closing HTTP server`);
   
   // تتبع الإيقاف
   monitoring.trackEvent('server_shutdown', { signal });
-  monitoring.flush();
+  
+  // إرسال البيانات قبل الإغلاق
+  await monitoring.flush();
 
-  server.close(() => {
+  server.close(async () => {
     console.log('HTTP server closed');
     
-    mongoose.connection.close(false, () => {
+    try {
+      // ✅ إصلاح: استخدام await بدلاً من callback
+      await mongoose.connection.close();
       console.log('MongoDB connection closed');
       process.exit(0);
-    });
+    } catch (err) {
+      console.error('Error closing MongoDB:', err.message);
+      process.exit(1);
+    }
   });
   
   // Force shutdown after 10 seconds
   setTimeout(() => {
-    console.error('Forced shutdown after timeout');
+    console.error('⚠️ Forced shutdown after timeout');
     process.exit(1);
   }, 10000);
 };
@@ -218,13 +224,13 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  console.error('❌ Uncaught Exception:', err);
   monitoring.trackException(err, { context: 'uncaught_exception' });
   monitoring.flush();
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  monitoring.trackException(new Error(reason), { context: 'unhandled_rejection' });
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  monitoring.trackException(new Error(String(reason)), { context: 'unhandled_rejection' });
 });
