@@ -32,11 +32,12 @@ WORKDIR /app
 # Copier les dépendances depuis l'étape précédente
 COPY --from=dependencies /app/node_modules ./node_modules
 
-# 👇 COPIER LE CODE SOURCE (من src/)
+# 👇 COPIER LE CODE SOURCE (TOUT!)
 COPY src/ ./src/
 COPY middleware/ ./middleware/
 COPY routes/ ./routes/
 COPY models/ ./models/
+COPY controllers/ ./controllers/
 COPY package*.json ./
 
 # Build si nécessaire (par exemple TypeScript)
