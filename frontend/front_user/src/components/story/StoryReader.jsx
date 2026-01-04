@@ -118,7 +118,7 @@ export default function ReadTheStory({
   const detectComplexWords = async (text) => {
   setComplexWordsLoading(true);
   try {
-    const response = await fetch('https://chatbot.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/detect_complex_words', {
+    const response = await fetch('https://chatbot.icyrock-9d46072c.italynorth.azurecontainerapps.io/detect_complex_words', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ export default function ReadTheStory({
     setSelectedWord(word);
 
     try {
-      const response = await fetch(`https://chatbot.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/word_info/${word}`);
+      const response = await fetch(`https://chatbot.icyrock-9d46072c.italynorth.azurecontainerapps.io/word_info/${word}`);
       if (!response.ok) throw new Error("Erreur réseau");
       
       const data = await response.json();
@@ -241,7 +241,7 @@ export default function ReadTheStory({
     const fetchStory = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/${id}`);
+        const response = await fetch(`https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/stories/${id}`);
         if (!response.ok) throw new Error('Erreur réseau');
         
         const data = await response.json();

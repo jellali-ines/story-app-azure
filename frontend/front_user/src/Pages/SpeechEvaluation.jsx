@@ -118,7 +118,7 @@ export default function SpeechEvaluation({ referenceText }) {
     formData.append('text', referenceText);
 
     try {
-      const response = await fetch('https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/evaluate-speech', {
+      const response = await fetch('https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/evaluate-speech', {
         method: 'POST',
         body: formData
       });
@@ -145,7 +145,7 @@ export default function SpeechEvaluation({ referenceText }) {
       
       // User-friendly error messages
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-        setError('❌ Cannot connect to backend server. Please make sure Flask is running on https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io');
+        setError('❌ Cannot connect to backend server. Please make sure Flask is running on https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io');
       } else {
         setError(err.message || "Error evaluating pronunciation. Please try again.");
       }

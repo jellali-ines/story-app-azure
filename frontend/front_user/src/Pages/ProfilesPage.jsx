@@ -14,7 +14,7 @@ const ChildProfilesPage = () => {
       if (!userId) return;
 
       try {
-        const response = await fetch(`https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/users/${userId}/kids`, {
+        const response = await fetch(`https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/users/${userId}/kids`, {
           method: "GET",
           credentials: "include"
         });

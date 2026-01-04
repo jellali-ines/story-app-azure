@@ -47,7 +47,7 @@ export default function StoryPage({ darkMode }) {
   const fetchStory = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/${id}`);
+      const response = await fetch(`https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/stories/${id}`);
       if (!response.ok) throw new Error('Erreur de chargement');
       
       const data = await response.json();

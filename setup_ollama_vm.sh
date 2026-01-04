@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ===========================
-# Setup Ollama VM on Azure
+# Setup Ollama VM on Azure - FIXED VERSION
 # ===========================
 
 # Load infrastructure config
@@ -16,7 +16,7 @@ source infra_config.env
 
 # Configuration
 VM_NAME="ollama-vm"
-VM_SIZE="Standard_D2s_v3"  # 2 vCPUs, 8GB RAM (~$70/month)
+VM_SIZE="Standard_D2s_v3"
 VM_IMAGE="Ubuntu2204"
 ADMIN_USER="azureuser"
 
@@ -90,11 +90,11 @@ echo "⏳ Waiting for VM to be ready..."
 sleep 30
 
 # ===========================
-# 5. Install Ollama on VM
+# 5. Install Ollama on VM (FIXED WITH SUDO)
 # ===========================
 echo "🦙 Installing Ollama on VM..."
 
-# Create installation script
+# Create installation script with PROPER SUDO
 cat > /tmp/install_ollama.sh << 'EOFSCRIPT'
 #!/bin/bash
 set -e
@@ -104,9 +104,11 @@ echo "Installing Ollama..."
 # Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Configure Ollama to accept external connections
+# Configure Ollama to accept external connections (WITH SUDO!)
 sudo mkdir -p /etc/systemd/system/ollama.service.d
-sudo cat > /etc/systemd/system/ollama.service.d/override.conf << 'EOF'
+
+# Use sudo tee instead of cat with redirect
+sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null << 'EOF'
 [Service]
 Environment="OLLAMA_HOST=0.0.0.0:11434"
 EOF
@@ -116,13 +118,22 @@ sudo systemctl daemon-reload
 sudo systemctl restart ollama
 sudo systemctl enable ollama
 
-echo "Ollama installed and configured"
+echo "✅ Ollama installed and configured"
+
+# Wait for Ollama to start
+sleep 5
 
 # Pull llama3.1:8b model
-echo "Pulling llama3.1:8b model (this may take 5-10 minutes)..."
+echo "📥 Pulling llama3.1:8b model (this may take 5-10 minutes)..."
 ollama pull llama3.1:8b
 
-echo "Setup complete!"
+echo "✅ Model downloaded!"
+echo ""
+echo "Testing Ollama..."
+ollama list
+
+echo ""
+echo "✅ Setup complete!"
 EOFSCRIPT
 
 # Copy script to VM
@@ -132,6 +143,7 @@ scp -i ~/.ssh/ollama_vm_rsa \
     ${ADMIN_USER}@${VM_IP}:/tmp/
 
 # Execute script on VM
+echo "🔧 Running installation script on VM..."
 ssh -i ~/.ssh/ollama_vm_rsa \
     -o StrictHostKeyChecking=no \
     ${ADMIN_USER}@${VM_IP} \
@@ -142,14 +154,15 @@ echo "✅ Ollama installed and model pulled"
 # ===========================
 # 6. Test Ollama
 # ===========================
+echo ""
 echo "🧪 Testing Ollama..."
-
 sleep 5
 
 if curl -s http://${VM_IP}:11434/api/tags | grep -q "llama3.1"; then
     echo "✅ Ollama is working correctly!"
 else
-    echo "⚠️  Ollama test failed. Check VM manually."
+    echo "⚠️  Ollama test failed. Checking status..."
+    ssh -i ~/.ssh/ollama_vm_rsa ${ADMIN_USER}@${VM_IP} "sudo systemctl status ollama"
 fi
 
 # ===========================
@@ -165,8 +178,11 @@ echo "  IP Address:    $VM_IP"
 echo "  SSH Command:   ssh -i ~/.ssh/ollama_vm_rsa ${ADMIN_USER}@${VM_IP}"
 echo "  Ollama URL:    http://${VM_IP}:11434"
 echo ""
-echo "🔧 Configuration for deploy_apps.sh:"
+echo "🔧 Configuration for deployment:"
 echo "  OLLAMA_URL=http://${VM_IP}:11434/api/generate"
+echo ""
+echo "📊 Test Ollama:"
+echo "  curl http://${VM_IP}:11434/api/tags"
 echo ""
 echo "=========================================="
 echo ""
@@ -175,8 +191,9 @@ echo "  VM (Standard_D2s_v3): ~$70/month"
 echo "  Storage: ~$5/month"
 echo "  Total: ~$75/month"
 echo ""
-echo "🗑️  To delete VM:"
+echo "🗑️  To delete VM and save money:"
 echo "  az vm delete --resource-group $RESOURCE_GROUP --name $VM_NAME --yes"
+echo "  az vm deallocate --resource-group $RESOURCE_GROUP --name $VM_NAME"
 echo "=========================================="
 
 # Save config
@@ -191,3 +208,7 @@ EOF
 
 echo ""
 echo "✅ Configuration saved to: ollama_vm_config.env"
+echo ""
+echo "🎯 Next Step: Deploy applications"
+echo "   ./deploy_apps.sh"
+echo ""

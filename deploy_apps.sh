@@ -13,12 +13,22 @@ RESOURCE_GROUP="rg-storytelling5"
 ACR_NAME="acrstory606755"
 ENV_NAME="env-storytelling"
 
+# Load Ollama config if exists
+if [ -f "ollama_vm_config.env" ]; then
+    source ollama_vm_config.env
+    echo "✅ Loaded Ollama config: $OLLAMA_URL"
+else
+    echo "⚠️  ollama_vm_config.env not found, using default"
+    OLLAMA_URL="http://172.213.217.70:11434/api/generate"
+fi
+
 echo "=========================================="
 echo "🚀 Story App - Deployment with MongoDB Atlas"
 echo "=========================================="
 echo "Resource Group: $RESOURCE_GROUP"
 echo "ACR: $ACR_NAME"
 echo "Database: MongoDB Atlas"
+echo "Ollama: $OLLAMA_URL"
 echo "=========================================="
 echo ""
 
@@ -70,23 +80,62 @@ cd ../..
 echo "✅ Frontend pushed"
 
 # =========================
-# 3. Deploy Backend
+# Get Application Insights Connection String
 # =========================
 echo ""
-echo "🚀 Deploying Backend with MongoDB Atlas..."
-
-az containerapp update \
-  --name "backend" \
+echo "📊 Getting Application Insights..."
+APPINSIGHTS_CONN=$(az monitor app-insights component show \
+  --app appinsights-story \
   --resource-group "$RESOURCE_GROUP" \
-  --image "${ACR_SERVER}/backend:latest" \
-  --set-env-vars \
-    "NODE_ENV=production" \
-    "PORT=5000" \
-    "MONGO_URI=${MONGO_ATLAS_URI}" \
-    "JWT_SECRET=supersecretkey"
+  --query connectionString \
+  --output tsv | tr -d '\r')
+
+echo "✅ Application Insights configured"
+
+# =========================
+# 3. Deploy Backend (CREATE or UPDATE)
+# =========================
+echo ""
+echo "🚀 Deploying Backend..."
+
+if az containerapp show --name backend --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  echo "Backend exists, updating..."
+  az containerapp update \
+    --name backend \
+    --resource-group "$RESOURCE_GROUP" \
+    --image "${ACR_SERVER}/backend:latest" \
+    --set-env-vars \
+      NODE_ENV=production \
+      PORT=5000 \
+      "MONGO_URI=${MONGO_ATLAS_URI}" \
+      "MONGODB_ATLAS_URI=${MONGO_ATLAS_URI}" \
+      "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+      JWT_SECRET=supersecretkey
+else
+  echo "Backend doesn't exist, creating..."
+  az containerapp create \
+    --name backend \
+    --resource-group "$RESOURCE_GROUP" \
+    --environment "$ENV_NAME" \
+    --image "${ACR_SERVER}/backend:latest" \
+    --target-port 5000 \
+    --ingress external \
+    --registry-server "$ACR_SERVER" \
+    --registry-username "$ACR_USER" \
+    --registry-password "$ACR_PASS" \
+    --env-vars \
+      NODE_ENV=production \
+      PORT=5000 \
+      "MONGO_URI=${MONGO_ATLAS_URI}" \
+      "MONGODB_ATLAS_URI=${MONGO_ATLAS_URI}" \
+      "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+      JWT_SECRET=supersecretkey \
+    --cpu 0.5 --memory 1Gi \
+    --min-replicas 1 --max-replicas 3
+fi
 
 BACKEND_URL=$(az containerapp show \
-  --name "backend" \
+  --name backend \
   --resource-group "$RESOURCE_GROUP" \
   --query properties.configuration.ingress.fqdn \
   --output tsv | tr -d '\r')
@@ -94,37 +143,91 @@ BACKEND_URL=$(az containerapp show \
 echo "✅ Backend deployed: https://$BACKEND_URL"
 
 # =========================
-# 4. Deploy AI Backend
+# 4. Deploy Chatbot (CREATE or UPDATE)
 # =========================
 echo ""
-echo "🤖 Deploying AI Backend..."
+echo "🤖 Deploying Chatbot..."
 
-az containerapp update \
-  --name "chatbot" \
-  --resource-group "$RESOURCE_GROUP" \
-  --image "${ACR_SERVER}/chatbot:latest"
+if az containerapp show --name chatbot --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  echo "Chatbot exists, updating..."
+  az containerapp update \
+    --name chatbot \
+    --resource-group "$RESOURCE_GROUP" \
+    --image "${ACR_SERVER}/chatbot:latest" \
+    --set-env-vars \
+      FLASK_ENV=production \
+      "OLLAMA_URL=${OLLAMA_URL}" \
+      MODEL_NAME=llama3.1:8b \
+      MAX_REQUESTS_PER_MINUTE=30 \
+      MAX_REQUESTS_PER_DAY=1000 \
+      "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
+else
+  echo "Chatbot doesn't exist, creating..."
+  az containerapp create \
+    --name chatbot \
+    --resource-group "$RESOURCE_GROUP" \
+    --environment "$ENV_NAME" \
+    --image "${ACR_SERVER}/chatbot:latest" \
+    --target-port 5002 \
+    --ingress external \
+    --registry-server "$ACR_SERVER" \
+    --registry-username "$ACR_USER" \
+    --registry-password "$ACR_PASS" \
+    --env-vars \
+      FLASK_ENV=production \
+      "OLLAMA_URL=${OLLAMA_URL}" \
+      MODEL_NAME=llama3.1:8b \
+      MAX_REQUESTS_PER_MINUTE=30 \
+      MAX_REQUESTS_PER_DAY=1000 \
+      "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
+    --cpu 0.5 --memory 1Gi \
+    --min-replicas 1 --max-replicas 3
+fi
 
 CHATBOT_URL=$(az containerapp show \
-  --name "chatbot" \
+  --name chatbot \
   --resource-group "$RESOURCE_GROUP" \
   --query properties.configuration.ingress.fqdn \
   --output tsv | tr -d '\r')
 
-echo "✅ AI Backend deployed: https://$CHATBOT_URL"
+echo "✅ Chatbot deployed: https://$CHATBOT_URL"
 
 # =========================
-# 5. Deploy Frontend
+# 5. Deploy Frontend (CREATE or UPDATE)
 # =========================
 echo ""
 echo "🎨 Deploying Frontend..."
 
-az containerapp update \
-  --name "frontend" \
-  --resource-group "$RESOURCE_GROUP" \
-  --image "${ACR_SERVER}/frontend:latest"
+if az containerapp show --name frontend --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  echo "Frontend exists, updating..."
+  az containerapp update \
+    --name frontend \
+    --resource-group "$RESOURCE_GROUP" \
+    --image "${ACR_SERVER}/frontend:latest" \
+    --set-env-vars \
+      "VITE_API_URL=https://$BACKEND_URL" \
+      "VITE_AI_API_URL=https://$CHATBOT_URL"
+else
+  echo "Frontend doesn't exist, creating..."
+  az containerapp create \
+    --name frontend \
+    --resource-group "$RESOURCE_GROUP" \
+    --environment "$ENV_NAME" \
+    --image "${ACR_SERVER}/frontend:latest" \
+    --target-port 80 \
+    --ingress external \
+    --registry-server "$ACR_SERVER" \
+    --registry-username "$ACR_USER" \
+    --registry-password "$ACR_PASS" \
+    --env-vars \
+      "VITE_API_URL=https://$BACKEND_URL" \
+      "VITE_AI_API_URL=https://$CHATBOT_URL" \
+    --cpu 0.25 --memory 0.5Gi \
+    --min-replicas 1 --max-replicas 5
+fi
 
 FRONTEND_URL=$(az containerapp show \
-  --name "frontend" \
+  --name frontend \
   --resource-group "$RESOURCE_GROUP" \
   --query properties.configuration.ingress.fqdn \
   --output tsv | tr -d '\r')
@@ -136,16 +239,24 @@ echo "✅ Frontend deployed: https://$FRONTEND_URL"
 # =========================
 echo ""
 echo "=========================================="
-echo "✅ DEPLOYMENT COMPLETE WITH MONGODB ATLAS"
+echo "✅ DEPLOYMENT COMPLETE"
 echo "=========================================="
 echo ""
 echo "🌐 Application URLs:"
 echo "  Frontend:    https://$FRONTEND_URL"
 echo "  Backend:     https://$BACKEND_URL"
-echo "  AI Backend:  https://$CHATBOT_URL"
+echo "  Chatbot:     https://$CHATBOT_URL"
 echo ""
 echo "📊 Database:"
 echo "  MongoDB Atlas Cluster0"
-echo "  Stories: 19 documents"
+echo ""
+echo "🦙 AI Model:"
+echo "  Ollama: $OLLAMA_URL"
+echo "  Model: llama3.1:8b"
+echo ""
+echo "🧪 Test the application:"
+echo "  Backend Health:  curl https://$BACKEND_URL/health"
+echo "  Chatbot Health:  curl https://$CHATBOT_URL/api/health"
+echo "  Frontend:        Open https://$FRONTEND_URL in browser"
 echo ""
 echo "=========================================="

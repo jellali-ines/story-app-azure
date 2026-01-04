@@ -5,8 +5,7 @@ import axios from 'axios';
 // API Base URL - from environment variables or localhost
 const API_BASE_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/api`
-  : 'https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api';
-// Create axios instance with default settings
+: 'https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api';// Create axios instance with default settings
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 seconds

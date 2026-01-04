@@ -83,7 +83,7 @@ const Stories = ({
           {/* Sections de stories normales */}
           <StoriesSection
             title="Trending Now"
-            apiUrl="https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/popular"
+            apiUrl="https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/stories/popular"
             itemsPerPage={4}
             darkMode={darkMode}
             theme={theme}
@@ -91,7 +91,7 @@ const Stories = ({
           
           <StoriesSection
             title="Recently Added"
-            apiUrl="https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories"
+            apiUrl="https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/stories"
             itemsPerPage={4}
             darkMode={darkMode}
             theme={theme}
@@ -99,7 +99,7 @@ const Stories = ({
           
           <StoriesSection
             title="Editor's Picks"
-            apiUrl="https://backend.bluesmoke-49ce99c2.italynorth.azurecontainerapps.io/api/stories/featured"
+            apiUrl="https://backend.icyrock-9d46072c.italynorth.azurecontainerapps.io/api/stories/featured"
             itemsPerPage={4}
             darkMode={darkMode}
             theme={theme}

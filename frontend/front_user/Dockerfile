@@ -9,16 +9,10 @@ COPY package*.json ./
 # تثبيت كل dependencies (dev + prod) للـ build
 RUN npm ci --legacy-peer-deps
 
-# نسخ الكود
+# نسخ الكود مع .env
 COPY . .
 
-# إعداد متغيرات البيئة للـ build
-ARG VITE_API_URL
-ARG VITE_AI_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_AI_API_URL=$VITE_AI_API_URL
-
-# Build مشروع Vite
+# Build مشروع Vite (سيستخدم .env تلقائياً)
 RUN npm run build
 
 # ========== STAGE 2: Production مع Nginx ==========
