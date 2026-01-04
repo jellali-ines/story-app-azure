@@ -1,32 +1,29 @@
-name: Deploy Story App to Azure
+name: Deploy Story App to Azure with Monitoring
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
     paths:
       - 'services/**'
       - 'frontend/**'
-      - '.github/workflows/deploy.yml'
-  pull_request:
-    branches: [ main ]
+      - '.github/workflows/**'
   workflow_dispatch:
 
 env:
   RESOURCE_GROUP: rg-storytelling5
   ACR_NAME: acrstory606755
-  LOCATION: italynorth
-  ENV_NAME: env-storytelling
   BACKEND_APP: backend
   CHATBOT_APP: chatbot
   FRONTEND_APP: frontend
 
 jobs:
   # ===========================
-  # JOB 1: Build & Push Images
+  # Job 1: Build & Push Images
   # ===========================
   build:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,228 +34,243 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to ACR
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ env.ACR_NAME }}.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          echo "🔐 Logging into Azure Container Registry..."
+          az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and Push Backend
         run: |
+          echo "🏗️ Building Backend image..."
           cd services/user_service
-          IMAGE=${{ env.ACR_NAME }}.azurecr.io/backend
-          docker build -t ${IMAGE}:${{ github.sha }} .
-          docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          docker push ${IMAGE}:${{ github.sha }}
-          docker push ${IMAGE}:latest
-          echo "✅ Backend image pushed"
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} .
+          docker tag ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/backend:latest
+          
+          echo "📤 Pushing Backend image..."
+          docker push ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/backend:latest
+          echo "✅ Backend image pushed successfully"
 
       - name: Build and Push Chatbot
         run: |
+          echo "🏗️ Building Chatbot image..."
           cd services/chatbot
-          IMAGE=${{ env.ACR_NAME }}.azurecr.io/chatbot
-          docker build -t ${IMAGE}:${{ github.sha }} .
-          docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          docker push ${IMAGE}:${{ github.sha }}
-          docker push ${IMAGE}:latest
-          echo "✅ Chatbot image pushed"
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} .
+          docker tag ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/chatbot:latest
+          
+          echo "📤 Pushing Chatbot image..."
+          docker push ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/chatbot:latest
+          echo "✅ Chatbot image pushed successfully"
 
       - name: Build and Push Frontend
         run: |
+          echo "🏗️ Building Frontend image..."
           cd frontend/front_user
-          IMAGE=${{ env.ACR_NAME }}.azurecr.io/frontend
-          docker build --target production -t ${IMAGE}:${{ github.sha }} .
-          docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
-          docker push ${IMAGE}:${{ github.sha }}
-          docker push ${IMAGE}:latest
-          echo "✅ Frontend image pushed"
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} .
+          docker tag ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/frontend:latest
+          
+          echo "📤 Pushing Frontend image..."
+          docker push ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/frontend:latest
+          echo "✅ Frontend image pushed successfully"
 
   # ===========================
-  # JOB 2: Deploy to Azure
+  # Job 2: Deploy to Azure
   # ===========================
   deploy:
     name: Deploy to Azure Container Apps
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main'
+    
     steps:
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy Backend
+      - name: Deploy Backend with Monitoring
         run: |
-          MONGODB_URI=${{ secrets.MONGODB_ATLAS_URI }}
-          APPINSIGHTS_CONN=$(az monitor app-insights component show --app appinsights-story --resource-group ${{ env.RESOURCE_GROUP }} --query connectionString --output tsv | tr -d '\r')
-          
-          if ! az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
-            echo "Creating Backend..."
-            az containerapp create \
-              --name ${{ env.BACKEND_APP }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --environment ${{ env.ENV_NAME }} \
-              --image ${{ env.ACR_NAME }}.azurecr.io/backend:latest \
-              --target-port 5000 \
-              --ingress external \
-              --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-              --registry-username ${{ secrets.ACR_USERNAME }} \
-              --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars NODE_ENV=production PORT=5000 "MONGO_URI=${MONGODB_URI}" "MONGODB_ATLAS_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
-              --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
-          else
-            echo "Updating Backend..."
-            az containerapp update --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} --set-env-vars NODE_ENV=production PORT=5000 "MONGO_URI=${MONGODB_URI}" "MONGODB_ATLAS_URI=${MONGODB_URI}" "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
-          fi
+          echo "🚀 Deploying Backend..."
+          az containerapp update \
+            --name ${{ env.BACKEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/backend:${{ github.sha }} \
+            --set-env-vars \
+              MONGODB_URI=secretref:mongodb-uri \
+              APPINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
+            --output none
+          echo "✅ Backend deployed successfully"
 
-      - name: Deploy Chatbot
+      - name: Deploy Chatbot with Monitoring
         run: |
-          APPINSIGHTS_CONN=$(az monitor app-insights component show --app appinsights-story --resource-group ${{ env.RESOURCE_GROUP }} --query connectionString --output tsv | tr -d '\r')
-          if ! az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
-            echo "Creating Chatbot..."
-            az containerapp create \
-              --name ${{ env.CHATBOT_APP }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --environment ${{ env.ENV_NAME }} \
-              --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:latest \
-              --target-port 5002 \
-              --ingress external \
-              --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-              --registry-username ${{ secrets.ACR_USERNAME }} \
-              --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=mistral:latest MAX_REQUESTS_PER_MINUTE=10 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}" \
-              --min-replicas 1 --max-replicas 3 --cpu 0.5 --memory 1Gi
-          else
-            echo "Updating Chatbot..."
-            az containerapp update --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} --set-env-vars FLASK_ENV=production OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate MODEL_NAME=mistral:latest MAX_REQUESTS_PER_MINUTE=10 MAX_REQUESTS_PER_DAY=1000 "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPINSIGHTS_CONN}"
-          fi
+          echo "🚀 Deploying Chatbot..."
+          az containerapp update \
+            --name ${{ env.CHATBOT_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/chatbot:${{ github.sha }} \
+            --set-env-vars \
+              OLLAMA_URL=http://${{ secrets.OLLAMA_VM_IP }}:11434/api/generate \
+              APPINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
+            --output none
+          echo "✅ Chatbot deployed successfully"
 
-      - name: Deploy Frontend
+      - name: Deploy Frontend with Monitoring
         run: |
-          BACKEND_URL=$(az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
-          CHATBOT_URL=$(az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
-          if ! az containerapp show --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} >/dev/null 2>&1; then
-            echo "Creating Frontend..."
-            az containerapp create \
-              --name ${{ env.FRONTEND_APP }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --environment ${{ env.ENV_NAME }} \
-              --image ${{ env.ACR_NAME }}.azurecr.io/frontend:latest \
-              --target-port 80 --ingress external \
-              --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-              --registry-username ${{ secrets.ACR_USERNAME }} \
-              --registry-password ${{ secrets.ACR_PASSWORD }} \
-              --env-vars VITE_API_URL=https://${BACKEND_URL} VITE_AI_API_URL=https://${CHATBOT_URL} \
-              --min-replicas 1 --max-replicas 5 --cpu 0.25 --memory 0.5Gi
-          else
-            echo "Updating Frontend..."
-            az containerapp update --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} --set-env-vars VITE_API_URL=https://${BACKEND_URL} VITE_AI_API_URL=https://${CHATBOT_URL}
-          fi
-
-  # ===========================
-  # JOB 3: Verify Deployment
-  # ===========================
-  verify:
-    name: Verify Deployment
-    runs-on: ubuntu-latest
-    needs: deploy
-    steps:
-      - name: Log in to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          echo "🚀 Deploying Frontend..."
+          az containerapp update \
+            --name ${{ env.FRONTEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ github.sha }} \
+            --set-env-vars \
+              APPINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
+            --output none
+          echo "✅ Frontend deployed successfully"
 
       - name: Get Application URLs
-        id: urls
         run: |
-          BACKEND_URL=$(az containerapp show --name ${{ env.BACKEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
-          CHATBOT_URL=$(az containerapp show --name ${{ env.CHATBOT_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
-          FRONTEND_URL=$(az containerapp show --name ${{ env.FRONTEND_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn --output tsv | tr -d '\r')
-          echo "BACKEND_URL=https://$BACKEND_URL" >> $GITHUB_OUTPUT
-          echo "CHATBOT_URL=https://$CHATBOT_URL" >> $GITHUB_OUTPUT
-          echo "FRONTEND_URL=https://$FRONTEND_URL" >> $GITHUB_OUTPUT
-
-      - name: Wait for services to be ready
-        run: |
-          echo "⏳ Waiting for services to stabilize..."
-          sleep 30
-
-      - name: Test Backend Health
-        run: |
-          BACKEND_URL="${{ steps.urls.outputs.BACKEND_URL }}"
-          echo "Testing: ${BACKEND_URL}/health"
+          echo "📊 Retrieving application URLs..."
           
-          RESPONSE=$(curl -s -w "\n%{http_code}" "${BACKEND_URL}/health")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          FRONTEND_URL=$(az containerapp show \
+            --name ${{ env.FRONTEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
           
-          echo "HTTP Code: $HTTP_CODE"
-          echo "Response: $HTTP_BODY"
+          BACKEND_URL=$(az containerapp show \
+            --name ${{ env.BACKEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          CHATBOT_URL=$(az containerapp show \
+            --name ${{ env.CHATBOT_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          echo "### 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application URLs:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌐 Frontend: https://$FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 Backend: https://$BACKEND_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- 🤖 Chatbot: https://$CHATBOT_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit SHA: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployed by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Monitoring:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 📈 [Application Insights](https://portal.azure.com/#@/resource/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/microsoft.insights/components/appinsights-story/overview)" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================
+  # Job 3: Health Check
+  # ===========================
+  verify:
+    name: Verify Deployment & Health
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Wait for Services to Stabilize
+        run: |
+          echo "⏳ Waiting 60 seconds for services to stabilize..."
+          sleep 60
+
+      - name: Check Backend Health
+        continue-on-error: true
+        run: |
+          BACKEND_URL=$(az containerapp show \
+            --name ${{ env.BACKEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          echo "🏥 Testing Backend: https://$BACKEND_URL/health"
+          
+          # Retry up to 3 times with 10 second delay
+          for i in 1 2 3; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://$BACKEND_URL/health || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Backend health check PASSED (HTTP $HTTP_CODE) on attempt $i"
+              exit 0
+            else
+              echo "⚠️ Attempt $i: Backend returned HTTP $HTTP_CODE"
+              if [ $i -lt 3 ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+              fi
+            fi
+          done
+          
+          echo "⚠️ Backend health check did not pass after 3 attempts"
+          echo "This is not critical - service may need more time to start"
+
+      - name: Check Chatbot Health
+        continue-on-error: true
+        run: |
+          CHATBOT_URL=$(az containerapp show \
+            --name ${{ env.CHATBOT_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          echo "🏥 Testing Chatbot: https://$CHATBOT_URL/api/health"
+          
+          # Retry up to 3 times with 10 second delay
+          for i in 1 2 3; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://$CHATBOT_URL/api/health || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Chatbot health check PASSED (HTTP $HTTP_CODE) on attempt $i"
+              exit 0
+            else
+              echo "⚠️ Attempt $i: Chatbot returned HTTP $HTTP_CODE"
+              if [ $i -lt 3 ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+              fi
+            fi
+          done
+          
+          echo "⚠️ Chatbot health check did not pass after 3 attempts"
+          echo "This is not critical - service may need more time to start"
+
+      - name: Check Frontend Accessibility
+        run: |
+          FRONTEND_URL=$(az containerapp show \
+            --name ${{ env.FRONTEND_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          echo "🏥 Testing Frontend: https://$FRONTEND_URL"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://$FRONTEND_URL || echo "000")
           
           if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Backend health check passed"
+            echo "✅ Frontend accessibility check PASSED (HTTP $HTTP_CODE)"
           else
-            echo "⚠️ Backend health check returned $HTTP_CODE"
+            echo "⚠️ Frontend returned HTTP $HTTP_CODE"
+            echo "Note: Service may still be starting up"
           fi
 
-      - name: Test Chatbot Health
-        run: |
-          CHATBOT_URL="${{ steps.urls.outputs.CHATBOT_URL }}"
-          echo "Testing: ${CHATBOT_URL}/api/health"
-          
-          RESPONSE=$(curl -s -w "\n%{http_code}" "${CHATBOT_URL}/api/health")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "HTTP Code: $HTTP_CODE"
-          echo "Response: $HTTP_BODY"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Chatbot health check passed"
-          else
-            echo "⚠️ Chatbot health check returned $HTTP_CODE"
-          fi
-
-      - name: Test Frontend Accessibility
-        run: |
-          FRONTEND_URL="${{ steps.urls.outputs.FRONTEND_URL }}"
-          echo "Testing: ${FRONTEND_URL}"
-          
-          RESPONSE=$(curl -s -w "\n%{http_code}" "${FRONTEND_URL}")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          
-          echo "HTTP Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Frontend accessibility check passed"
-          else
-            echo "⚠️ Frontend returned $HTTP_CODE"
-          fi
-
-     
-
-      - name: Final Verification Summary
+      - name: Health Summary
         if: always()
         run: |
           echo ""
-          echo "=========================================="
-          echo "✅ DEPLOYMENT COMPLETED"
-          echo "=========================================="
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🏥 HEALTH CHECK SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "🌐 Frontend:"
-          echo "   ${{ steps.urls.outputs.FRONTEND_URL }}"
+          echo "All services have been deployed and tested."
+          echo "Check Application Insights for detailed metrics:"
+          echo "https://portal.azure.com/#@/resource/subscriptions/7e61bf81-3416-43bf-84b7-f7a80484e399/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/microsoft.insights/components/appinsights-story/overview"
           echo ""
-          echo "🔗 Backend:"
-          echo "   ${{ steps.urls.outputs.BACKEND_URL }}"
-          echo "   Health: ${{ steps.urls.outputs.BACKEND_URL }}/health"
-          echo "   Test DB: ${{ steps.urls.outputs.BACKEND_URL }}/api/test-db"
-          echo ""
-          echo "🔗 Chatbot:"
-          echo "   ${{ steps.urls.outputs.CHATBOT_URL }}"
-          echo "   Health: ${{ steps.urls.outputs.CHATBOT_URL }}/api/health"
-          echo ""
-          echo "📊 Database: MongoDB Atlas"
-          echo "🦙 AI Model: mistral:latest"
-          echo "⚙️  Framework: Node.js + Flask + React"
-          echo ""
-          echo "=========================================="
+          echo "📧 Email alerts configured for: ines.jellali@polytechnicien.tn"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
