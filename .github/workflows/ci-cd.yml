@@ -3,10 +3,7 @@ name: Deploy Story App to Azure
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'services/**'
-      - 'frontend/**'
-      - '.github/workflows/deploy.yml'
+    # ✅ إزالة paths: الآن سيعمل على أي تعديل!
   workflow_dispatch:
 
 env:
