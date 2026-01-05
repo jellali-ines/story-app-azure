@@ -32,7 +32,6 @@ fi
 # =========================
 # 2. Azure Container Registry
 # =========================
-echo ""
 echo "🐳 Checking/Creating Azure Container Registry..."
 ACR_NAME="acrstory606755"
 
