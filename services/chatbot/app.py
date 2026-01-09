@@ -1,11 +1,3 @@
-"""
-Ollama Backend - Optimized Production Version
-✅ Clean code, no redundant elements
-✅ Redis-ready rate limiting
-✅ Cached health checks
-✅ Minimal logging overhead
-"""
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -15,6 +7,7 @@ from collections import defaultdict
 import threading
 import logging
 import os
+import re
 
 from monitoring import monitoring
 
@@ -39,13 +32,13 @@ if APPINSIGHTS_CONN:
 
 # ================= CONFIG =================
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama-vm:11434/api/generate")
-MODEL_NAME = os.getenv("MODEL_NAME", "mistral:latest")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3.1:8b")  # ✅ تحسين: تغيير من mistral لـ llama
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
 MAX_REQUESTS_PER_MINUTE = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "30"))
 MAX_REQUESTS_PER_DAY = int(os.getenv("MAX_REQUESTS_PER_DAY", "1000"))
 
 # Rate limiting storage
-_rate_limit_lock = threading.RLock()  # RLock allows re-entrant locking
+_rate_limit_lock = threading.RLock()
 rate_limit_storage = defaultdict(lambda: {'minute': [], 'day': []})
 
 # ================= MIDDLEWARE =================
@@ -103,17 +96,15 @@ def check_rate_limit(client_ip):
         return True, None
 
 _ollama_cache = {'status': None, 'timestamp': 0}
-CACHE_TTL = 30  # seconds
+CACHE_TTL = 30
 
 def check_ollama_status():
     """Health check with 30-second cache"""
     current_time = time.time()
     
-    # Check if cache is valid
     if current_time - _ollama_cache['timestamp'] < CACHE_TTL:
         return _ollama_cache['status']
     
-    # Cache expired, check Ollama
     try:
         base_url = OLLAMA_URL.replace('/api/generate', '')
         response = requests.get(f"{base_url}/api/tags", timeout=5)
@@ -122,146 +113,257 @@ def check_ollama_status():
         logger.error(f"Ollama unreachable: {e}")
         status = False
     
-    # Update cache
     _ollama_cache['status'] = status
     _ollama_cache['timestamp'] = current_time
     
     return status
 
-def build_smart_prompt(user_message, story_context):
-    """Build intelligent prompt based on question type"""
+# ✅ تحسين: دالة جديدة لكشف نوع السؤال
+def detect_question_type(user_message):
+    """Detect the type of question to provide better formatting"""
+    message_lower = user_message.lower().strip()
     
-    message_lower = user_message.lower()
+    if any(word in message_lower for word in ['who is', 'who are', 'who was', 'character', 'describe']):
+        return 'character'
+    elif message_lower.startswith('why'):
+        return 'why'
+    elif message_lower.startswith('how'):
+        if any(word in message_lower for word in ['feel', 'felt', 'feeling', 'react']):
+            return 'feeling'
+        return 'how'
+    elif any(word in message_lower for word in ['compare', 'difference', 'similar', 'same']):
+        return 'comparison'
+    elif any(word in message_lower for word in ['what happened', 'summary', 'summarize', 'recap']):
+        return 'summary'
+    elif any(word in message_lower for word in ['moral', 'lesson', 'teach', 'learn']):
+        return 'lesson'
+    elif 'what if' in message_lower:
+        return 'imagination'
+    else:
+        return 'general'
+
+def build_enhanced_prompt(user_message, story_context, question_type):
+    """✅ تحسين: Build intelligent prompt based on question type"""
     
-    system_context = f"""You are a helpful storytelling assistant for children.
+    system_context = f"""You are a knowledgeable and friendly storytelling assistant for children.
+Your role is to help children understand and enjoy stories.
 
 STORY:
 {story_context}
 
-RULES:
-- Answer based ONLY on the story above
-- Use simple words for children (ages 5-12)
-- Add fun emojis 😊
-- Keep answers clear and accurate
-- If answer not in story, say "I don't know that from the story!"
-- Never make up information
+CRITICAL RULES:
+✅ Answer ONLY based on the story above
+✅ Use simple, engaging words for children (ages 5-12)
+✅ Add relevant emojis to make answers fun 😊
+✅ Keep answers accurate and truthful
+✅ If something is not in the story, say "I don't know that from the story!"
+❌ NEVER make up information
+❌ NEVER add details not in the story
+❌ NEVER use complex vocabulary
 
 """
 
-    # Detect question type and customize instructions
-    if any(word in message_lower for word in ['character', 'who is', 'who are', 'who was']):
-        instructions = """Question: {question}
+    # Build question-specific prompt
+    if question_type == 'character':
+        prompt = system_context + f"""
+Question: {user_message}
 
-List ALL important characters who appear multiple times or do important things.
+Your task: Describe ALL important characters mentioned in the story.
 
-Format:
-The main characters are:
-1. **Name** 👤 - what they do
-2. **Name** 👤 - what they do
+FORMAT YOUR ANSWER LIKE THIS:
+📚 **Main Characters:**
 
-Answer:"""
-        
-    elif message_lower.startswith('why'):
-        instructions = """Question: {question}
+1. **[Name]** 👤
+   - Role: What they do in the story
+   - Actions: What they did
+   - Importance: Why they matter
 
-Explain WHY in 3-4 sentences:
-- What happened?
-- Why did it happen?
-- What was the reason?
+2. **[Name]** 👤
+   - Role: What they do
+   - Actions: What they did
+   - Importance: Why they matter
 
-Answer:"""
-        
-    elif message_lower.startswith('how'):
-        if any(word in message_lower for word in ['feel', 'felt', 'feeling']):
-            instructions = """Question: {question}
+Include as many characters as important to the story!
 
-Explain feelings in 2-3 sentences with emotion emojis 😊😢😱:
-- What happened?
-- How did they feel?
-- Why?
+ANSWER:"""
 
-Answer:"""
-        else:
-            instructions = """Question: {question}
+    elif question_type == 'why':
+        prompt = system_context + f"""
+Question: {user_message}
 
-Explain step by step:
-1. First...
-2. Then...
-3. Finally...
+Your task: Explain WHY something happened.
 
-Answer:"""
-    
-    elif any(word in message_lower for word in ['compare', 'difference', 'similar']):
-        instructions = """Question: {question}
+FORMAT YOUR ANSWER LIKE THIS:
+🔍 **Why Did This Happen?**
 
-Compare clearly:
-1. First person/thing
-2. Second person/thing
-3. How they differ or are similar
+**What happened:** [Brief description]
 
-Answer:"""
-    
-    elif any(word in message_lower for word in ['what happened', 'summary', 'summarize']):
-        instructions = """Question: {question}
+**Why it happened:** [Main reason]
+- Reason 1
+- Reason 2 (if applicable)
 
-Give complete summary in 5-6 sentences:
-1. Beginning
-2. Problem
-3. Action
-4. Solution
-5. Ending
+**Result:** [What changed because of this]
 
-Answer:"""
-    
-    elif any(word in message_lower for word in ['moral', 'lesson', 'learn', 'teach']):
-        instructions = """Question: {question}
+Keep it to 3-4 sentences. Use simple words!
 
-Explain the lesson in 3-4 sentences with wisdom emojis 💡✨:
-- What does the story teach?
-- Why is this important?
-- How can we use this?
+ANSWER:"""
 
-Answer:"""
-    
-    elif 'what if' in message_lower:
-        instructions = """Question: {question}
+    elif question_type == 'feeling':
+        prompt = system_context + f"""
+Question: {user_message}
 
-Imagination question! Think about:
-- What would change?
-- Better or worse?
-- What happens next?
+Your task: Explain the feelings of characters in the story.
 
-Answer in 3-4 sentences 🤔
+FORMAT YOUR ANSWER LIKE THIS:
+💭 **How Did They Feel?**
 
-Answer:"""
-    
-    else:
-        instructions = """Question: {question}
+**Situation:** [What happened]
 
-Answer clearly in 2-4 sentences. Keep it simple and fun! Add emojis!
+**Emotions:** [How characters felt] 😊😢😱😊
+- Character 1 felt: [emotion]
+- Character 2 felt: [emotion]
 
-Answer:"""
-    
-    return system_context + instructions.format(question=user_message)
+**Why:** [Reasons for these feelings]
+
+ANSWER:"""
+
+    elif question_type == 'how':
+        prompt = system_context + f"""
+Question: {user_message}
+
+Your task: Explain HOW something happened step by step.
+
+FORMAT YOUR ANSWER LIKE THIS:
+📋 **Step-by-Step Explanation:**
+
+**Step 1️⃣:** [First thing that happened]
+
+**Step 2️⃣:** [What happened next]
+
+**Step 3️⃣:** [Then what]
+
+**Step 4️⃣:** [Final result] ✅
+
+Use simple words and be clear!
+
+ANSWER:"""
+
+    elif question_type == 'comparison':
+        prompt = system_context + f"""
+Question: {user_message}
+
+Your task: Compare two things from the story.
+
+FORMAT YOUR ANSWER LIKE THIS:
+⚖️ **Comparison:**
+
+**[First Thing]:**
+- Characteristic 1
+- Characteristic 2
+
+**[Second Thing]:**
+- Characteristic 1
+- Characteristic 2
+
+**Similarities:** [What's the same]
+**Differences:** [What's different]
+
+ANSWER:"""
+
+    elif question_type == 'summary':
+        prompt = system_context + f"""
+Question: {user_message}
+
+Your task: Summarize the story or a part of it.
+
+FORMAT YOUR ANSWER LIKE THIS:
+📖 **Story Summary:**
+
+**Beginning:** [How the story starts]
+
+**Problem:** [What's the challenge]
+
+**Action:** [What characters do]
+
+**Solution:** [How they solve it]
+
+**Ending:** [How it ends] ✅
+
+Keep each point to 1-2 sentences!
+
+ANSWER:"""
+
+    elif question_type == 'lesson':
+        prompt = system_context + f"""
+Question: {user_message}
+
+Your task: Explain the lesson or moral of the story.
+
+FORMAT YOUR ANSWER LIKE THIS:
+💡 **The Lesson:**
+
+**What the story teaches:** [The moral/lesson]
+
+**Why this matters:** [Why is this important for children]
+
+**Real-life example:** [How we can use this lesson in life]
+
+**Key takeaway:** [The most important thing to remember] ✨
+
+ANSWER:"""
+
+    elif question_type == 'imagination':
+        prompt = system_context + f"""
+Question: {user_message}
+
+Your task: Think about a "what if" scenario based on the story.
+
+FORMAT YOUR ANSWER LIKE THIS:
+🤔 **What If?**
+
+**The scenario:** {user_message}
+
+**What would change:** [How things would be different]
+
+**Consequences:** [What would happen as a result]
+
+**Comparison:** [How this is different from the actual story]
+
+Be creative but stay based on the story!
+
+ANSWER:"""
+
+    else:  # general
+        prompt = system_context + f"""
+Question: {user_message}
+
+Answer clearly in 3-4 sentences. Include relevant emojis.
+Make your answer fun and easy to understand for children!
+
+ANSWER:"""
+
+    return prompt
 
 def call_ollama(user_message, story_context):
-    """Call Ollama API with optimized settings"""
+    """✅ تحسين: Call Ollama API with enhanced prompts"""
+    
+    question_type = detect_question_type(user_message)
     
     monitoring.track_event('chat_request', {
         'message_length': len(user_message),
-        'model': MODEL_NAME
+        'model': MODEL_NAME,
+        'question_type': question_type  # ✅ تحسين: track question type
     })
     
     try:
         start_time = time.time()
-        prompt = build_smart_prompt(user_message, story_context)
+        prompt = build_enhanced_prompt(user_message, story_context, question_type)
         
-        # Detect complexity
-        is_complex = any(word in user_message.lower() for word in 
-                         ['why', 'how', 'compare', 'what if', 'moral', 'lesson'])
+        # ✅ تحسين: Adjust parameters based on question complexity
+        is_complex = question_type in ['comparison', 'summary', 'lesson', 'imagination']
         
         temperature = 0.6 if is_complex else 0.5
-        max_tokens = 450 if is_complex else 350
+        max_tokens = 500 if is_complex else 350
         
         # Call Ollama
         response = requests.post(
@@ -287,24 +389,25 @@ def call_ollama(user_message, story_context):
             reply = response.json().get('response', '').strip()
             
             if not reply:
-                reply = "Sorry, I couldn't answer! Try asking differently! 😊"
+                reply = "Sorry, I couldn't answer that! Try asking differently! 😊"
             
-            # Clean up
-            if reply.lower().startswith('answer:'):
-                reply = reply[7:].strip()
+            # ✅ تحسين: Better cleanup
+            reply = re.sub(r'(^|[\n])(answer|explanation|response):\s*', '\\1', reply, flags=re.IGNORECASE)
             
             monitoring.track_inference(
                 model=MODEL_NAME,
                 prompt_tokens=len(user_message.split()),
                 response_tokens=len(reply.split()),
                 duration=response_time * 1000,
-                success=True
+                success=True,
+                question_type=question_type  # ✅ تحسين: track type
             )
             
             return {
                 'reply': reply,
                 'response_time': response_time,
-                'status': 'success'
+                'status': 'success',
+                'question_type': question_type  # ✅ تحسين: return type
             }
         else:
             error_msg = f"Ollama error {response.status_code}"
@@ -323,45 +426,90 @@ def call_ollama(user_message, story_context):
         monitoring.track_error('OllamaException', str(e))
         return {'error': str(e), 'status': 'error'}
 
+# ✅ تحسين: دالة محسنة لشرح الكلمات
+def build_word_explanation_prompt(word, story_context):
+    """✅ تحسين: Enhanced word explanation prompt"""
+    
+    prompt = f"""You are a patient and friendly teacher helping children learn new words.
+
+STORY CONTEXT: {story_context[:400] if story_context else "No context provided"}
+
+WORD TO EXPLAIN: "{word}"
+
+EXPLAIN THIS WORD FOLLOWING THIS FORMAT EXACTLY:
+
+📖 **Definition:**
+[Simple 1-sentence definition that a 6-year-old can understand]
+
+📝 **In the Story:**
+[If the word appears in the story, explain how it's used]
+[If not in the story, say "This word doesn't appear in the story"]
+
+💡 **Fun Example:**
+[Give a simple, relatable example a child would understand]
+[Use emojis to make it fun!] 😊
+
+⭐ **Similar Words:**
+[Give 1-2 similar or related words]
+
+IMPORTANT RULES:
+- Use ONLY simple words
+- Add fun emojis
+- Make it engaging and short
+- Perfect for children aged 5-12
+
+EXPLANATION:"""
+    
+    return prompt
+
+def call_ollama_word_explanation(word, story_context):
+    """✅ تحسين: Enhanced word explanation call"""
+    
+    monitoring.track_event('word_explanation_requested', {
+        'word': word,
+        'has_context': bool(story_context)
+    })
+    
+    try:
+        prompt = build_word_explanation_prompt(word, story_context)
+        
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": MODEL_NAME,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.6,
+                    "num_predict": 250,
+                    "top_p": 0.9
+                }
+            },
+            timeout=OLLAMA_TIMEOUT
+        )
+        
+        if response.status_code == 200:
+            explanation = response.json().get('response', '').strip()
+            
+            if not explanation:
+                explanation = f"The word '{word}' means something special! 📚 Try asking in the story context!"
+            
+            # Cleanup
+            explanation = re.sub(r'(^|[\n])(explanation|response):\s*', '\\1', explanation, flags=re.IGNORECASE)
+            
+            return {
+                'explanation': explanation,
+                'status': 'success'
+            }
+        else:
+            return {'error': 'Failed to explain word', 'status': 'error'}
+    
+    except requests.exceptions.Timeout:
+        return {'error': 'Request timeout', 'status': 'timeout'}
+    except Exception as e:
+        return {'error': str(e), 'status': 'error'}
+
 # ================= ENDPOINTS =================
-
-@app.route('/api/stories/featured', methods=['GET'])
-def get_featured_stories():
-    """Get featured stories (placeholder - integrate with your database)"""
-    try:
-        # TODO: Replace with actual database query
-        featured = [
-            {
-                'id': 1,
-                'title': 'The Brave Little Mouse',
-                'description': 'A story about courage',
-                'image': '/images/mouse.jpg',
-                'featured': True
-            }
-        ]
-        return jsonify(featured), 200
-    except Exception as e:
-        logger.error(f"Error fetching featured stories: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/stories/popular', methods=['GET'])
-def get_popular_stories():
-    """Get popular stories (placeholder)"""
-    try:
-        # TODO: Replace with actual database query
-        popular = [
-            {
-                'id': 2,
-                'title': 'The Magic Forest',
-                'description': 'An adventure story',
-                'image': '/images/forest.jpg',
-                'views': 1000
-            }
-        ]
-        return jsonify(popular), 200
-    except Exception as e:
-        logger.error(f"Error fetching popular stories: {e}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -369,18 +517,21 @@ def health():
     
     return jsonify({
         'status': 'OK' if ollama_status else 'Degraded',
-        'service': 'Story Ollama Backend',
+        'service': 'Story Ollama Backend v4.0',  # ✅ تحسين: version update
         'ollama_url': OLLAMA_URL,
         'model': MODEL_NAME,
         'timeout': f'{OLLAMA_TIMEOUT}s',
         'ollama_connected': ollama_status,
         'features': [
-            'Smart question detection',
-            'Context-aware responses',
-            'Character analysis',
-            'Why/How questions',
-            'Comparison support',
-            'Moral/Lesson extraction'
+            '🧠 Smart question type detection',
+            '📊 Context-aware responses',
+            '👥 Character analysis',
+            '❓ Why/How explanations',
+            '⚖️ Comparison support',
+            '💡 Moral/Lesson extraction',
+            '🤔 What-if scenarios',
+            '📖 Enhanced word explanations',
+            '🎨 Formatted responses for kids'
         ],
         'timestamp': datetime.now().isoformat()
     })
@@ -389,8 +540,9 @@ def health():
 def test():
     return jsonify({
         'message': 'Backend is working! 🎉',
-        'version': '3.0 - Optimized',
+        'version': '4.0 - Enhanced',
         'ollama_connected': check_ollama_status(),
+        'model': MODEL_NAME,
         'timestamp': datetime.now().isoformat()
     }), 200
 
@@ -403,12 +555,12 @@ def get_stats():
     return jsonify({
         'requests_today': daily,
         'remaining_today': remaining,
-        'max_per_day': MAX_REQUESTS_PER_DAY
+        'max_per_day': MAX_REQUESTS_PER_DAY,
+        'model': MODEL_NAME
     }), 200
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    
     try:
         # Rate limit check
         client_ip = get_client_ip()
@@ -438,6 +590,7 @@ def chat():
         return jsonify({
             'reply': result['reply'],
             'response_time': result.get('response_time', 0),
+            'question_type': result.get('question_type'),  # ✅ تحسين: return type
             'timestamp': datetime.now().isoformat(),
             'status': 'success'
         }), 200
@@ -449,7 +602,6 @@ def chat():
 
 @app.route('/api/explain-word', methods=['POST'])
 def explain_word():
-    
     try:
         # Rate limit
         client_ip = get_client_ip()
@@ -468,58 +620,16 @@ def explain_word():
         if not check_ollama_status():
             return jsonify({'error': 'Ollama not reachable'}), 503
         
-        monitoring.track_event('word_explanation_requested', {'word': word})
+        result = call_ollama_word_explanation(word, story_context)
         
-        # Build prompt
-        prompt = f"""You are teaching a child about words.
-
-STORY: {story_context[:600]}
-WORD: "{word}"
-
-Explain in 2-3 simple sentences with example and emoji.
-
-Explanation:"""
-        
-        try:
-            response = requests.post(
-                OLLAMA_URL,
-                json={
-                    "model": MODEL_NAME,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 200,
-                        "top_p": 0.9
-                    }
-                },
-                timeout=OLLAMA_TIMEOUT
-            )
-            
-            if response.status_code == 200:
-                explanation = response.json().get('response', '').strip()
-                
-                if not explanation:
-                    explanation = f"The word '{word}' means something special! 📚"
-                
-                if explanation.lower().startswith('explanation:'):
-                    explanation = explanation[12:].strip()
-                
-                return jsonify({
-                    'word': word,
-                    'explanation': explanation,
-                    'status': 'success'
-                }), 200
-            else:
-                return jsonify({'error': 'Failed to explain', 'status': 'error'}), 500
-        
-        except requests.exceptions.Timeout:
-            monitoring.track_error('WordExplanationTimeout', f'Timeout after {OLLAMA_TIMEOUT}s')
-            return jsonify({'error': 'Request timeout', 'status': 'timeout'}), 504
-        
-        except Exception as e:
-            monitoring.track_error('WordExplanationException', str(e))
-            return jsonify({'error': str(e), 'status': 'error'}), 500
+        if result.get('status') == 'success':
+            return jsonify({
+                'word': word,
+                'explanation': result['explanation'],
+                'status': 'success'
+            }), 200
+        else:
+            return jsonify(result), 500
     
     except Exception as e:
         logger.error(f"Error in /api/explain-word: {e}")
@@ -539,19 +649,21 @@ def internal_error(error):
 # ================= MAIN =================
 
 if __name__ == '__main__':
-    logger.info(f"Starting Story Backend v3.0")
-    logger.info(f"Ollama: {OLLAMA_URL}")
-    logger.info(f"Model: {MODEL_NAME}")
-    logger.info(f"Timeout: {OLLAMA_TIMEOUT}s")
+    logger.info(f"🚀 Starting Story Backend v4.0 - Enhanced")
+    logger.info(f"📡 Ollama: {OLLAMA_URL}")
+    logger.info(f"🧠 Model: {MODEL_NAME}")
+    logger.info(f"⏱️ Timeout: {OLLAMA_TIMEOUT}s")
+    logger.info(f"👨‍👧‍👦 For: Kids Learning Platform")
     
     monitoring.track_event('backend_started', {
         'model': MODEL_NAME,
-        'timeout': OLLAMA_TIMEOUT
+        'timeout': OLLAMA_TIMEOUT,
+        'version': '4.0'
     })
     
     if check_ollama_status():
-        logger.info("Ollama connected ✓")
+        logger.info("✅ Ollama connected!")
     else:
-        logger.warning(f"Ollama unreachable at {OLLAMA_URL}")
+        logger.warning(f"⚠️ Ollama unreachable at {OLLAMA_URL}")
     
     app.run(host='0.0.0.0', port=5002, debug=False, threaded=True)
